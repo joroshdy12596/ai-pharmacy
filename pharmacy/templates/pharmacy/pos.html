@@ -369,6 +369,48 @@ $(document).ready(function() {
 });
 </script>
 
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const barcodeInput = document.getElementById('barcode');
+    const expirationDiv = document.createElement('div');
+    expirationDiv.className = 'form-group';
+    expirationDiv.style.display = 'none';
+    expirationDiv.innerHTML = `
+        <label for="expiration_date">Expiration Date</label>
+        <select name="expiration_date" id="expiration_date" class="form-control"></select>
+    `;
+    const form = document.getElementById('add-to-cart-form');
+    // Insert after barcode input for better UX
+    form.querySelector('.row').insertBefore(expirationDiv, form.querySelector('.row').children[1]);
+
+    barcodeInput.addEventListener('change', function() {
+        const barcode = barcodeInput.value;
+        const expSelect = document.getElementById('expiration_date');
+        expirationDiv.style.display = 'none';
+        expSelect.innerHTML = '';
+        if (barcode) {
+            fetch("{% url 'pharmacy:get_expiration_dates' %}?barcode=" + encodeURIComponent(barcode))
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.dates.length > 1) {
+                        expSelect.innerHTML = data.dates.map(date => `<option value="${date}">${date}</option>`).join('');
+                        expirationDiv.style.display = '';
+                        expSelect.required = true;
+                    } else if (data.success && data.dates.length === 1) {
+                        // Only one date, add a hidden input so it is submitted
+                        expirationDiv.style.display = 'none';
+                        expSelect.required = false;
+                        expSelect.innerHTML = `<option value="${data.dates[0]}" selected></option>`;
+                    } else {
+                        expirationDiv.style.display = 'none';
+                        expSelect.required = false;
+                    }
+                });
+        }
+    });
+});
+</script>
+
 <style>
 .select2-container {
     width: 100% !important;

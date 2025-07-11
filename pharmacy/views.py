@@ -1393,6 +1393,7 @@ def pos_add_to_cart(request):
             quantity = int(request.POST.get('quantity', 1))
             unit_type = request.POST.get('unit_type', 'BOX')
             customer_id = request.POST.get('customer_id')
+            expiration_date = request.POST.get('expiration_date')
 
             medicine = Medicine.objects.get(barcode_number=barcode)
             customer = Customer.objects.get(id=customer_id) if customer_id else None
@@ -1412,6 +1413,16 @@ def pos_add_to_cart(request):
             if medicine.stock < box_quantity:
                 messages.error(request, 'Insufficient stock')
                 return redirect('pharmacy:pos')
+
+            # If expiration_date is provided, deduct from the correct StockEntry
+            if expiration_date:
+                stock_entry = medicine.stock_entries.filter(expiration_date=expiration_date, quantity__gte=quantity).first()
+                if not stock_entry:
+                    messages.error(request, 'Selected expiration date does not have enough stock')
+                    return redirect('pharmacy:pos')
+                stock_entry.quantity -= quantity
+                stock_entry.save()
+                medicine.update_stock()
 
             # Calculate original unit price
             original_price = medicine.get_strip_price() if unit_type == 'STRIP' else medicine.price
@@ -1447,6 +1458,7 @@ def pos_add_to_cart(request):
                 'name': medicine.name,
                 'quantity': quantity,
                 'unit_type': unit_type,
+                'expiration_date': expiration_date,
                 'original_price': float(original_price),
                 'discounted_price': float(discounted_price),
                 'total': discounted_total
@@ -1735,3 +1747,17 @@ def delete_stock_entry(request, entry_id):
         'medicine': medicine,
     }
     return render(request, 'pharmacy/delete_stock_entry.html', context)
+
+from django.views.decorators.http import require_GET
+
+@require_GET
+@login_required
+def get_expiration_dates(request):
+    barcode = request.GET.get('barcode')
+    try:
+        medicine = Medicine.objects.get(barcode_number=barcode)
+        stock_entries = medicine.stock_entries.filter(quantity__gt=0, expiration_date__gte=timezone.now().date())
+        dates = [entry.expiration_date.strftime('%Y-%m-%d') for entry in stock_entries]
+        return JsonResponse({'success': True, 'dates': dates})
+    except Medicine.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Medicine not found'})

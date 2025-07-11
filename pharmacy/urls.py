@@ -19,6 +19,7 @@ urlpatterns = [
     path('pos/add/', views.pos_add_to_cart, name='pos_add_to_cart'),
     path('pos/remove/<int:item_id>/', views.pos_remove_item, name='pos_remove_item'),
     path('pos/complete/', views.pos_complete_sale, name='pos_complete_sale'),
+    path('pos/get_expiration_dates/', views.get_expiration_dates, name='get_expiration_dates'),
     path('sales/', views.sales_history, name='sales_history'),
     path('sales/<int:sale_id>/', views.sale_detail, name='sale_detail'),
     path('dashboard/', views.dashboard, name='dashboard'),
