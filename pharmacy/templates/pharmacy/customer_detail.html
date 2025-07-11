@@ -1,0 +1,93 @@
+{% extends 'pharmacy/base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <h2>تفاصيل العميل</h2>
+        </div>
+        <div class="col-md-6 text-end">
+            <a href="{% url 'pharmacy:customer_list' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> عودة للقائمة
+            </a>
+            <a href="{% url 'pharmacy:customer_edit' customer.pk %}" class="btn btn-primary">
+                <i class="fas fa-edit"></i> تعديل
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- معلومات العميل -->
+        <div class="col-md-4 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">معلومات العميل</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>الاسم:</strong> {{ customer.name }}</p>
+                    <p><strong>الهاتف:</strong> {{ customer.phone }}</p>
+                    <p><strong>البريد الإلكتروني:</strong> {{ customer.email|default:"غير متوفر" }}</p>
+                    <p><strong>العنوان:</strong><br>{{ customer.address|default:"غير متوفر" }}</p>
+                    <p><strong>نقاط الولاء:</strong> {{ customer.points }}</p>
+                    <p><strong>نوع العميل:</strong> {{ customer.get_customer_type_display }}</p>
+                    {% if customer.customer_type == 'FAMILY' %}
+                    <p><strong>الخصم:</strong> سعر التكلفة + 10% فقط</p>
+                    {% else %}
+                    <p><strong>نسبة الخصم:</strong> {{ customer.discount_percentage }}%</p>
+                    {% endif %}
+                    <p><strong>الحالة:</strong> 
+                        <span class="badge {% if customer.is_active %}bg-success{% else %}bg-danger{% endif %}">
+                            {{ customer.is_active|yesno:"نشط,غير نشط" }}
+                        </span>
+                    </p>
+                    <p><strong>عميل منذ:</strong> {{ customer.created_at|date:"F d, Y" }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- سجل المشتريات -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Purchase History</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Items</th>
+                                    <th>Total</th>
+                                    <th>Payment</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for sale in sales %}
+                                <tr>
+                                    <td>{{ sale.created_at|date:"F d, Y H:i" }}</td>
+                                    <td>{{ sale.items.count }} items</td>
+                                    <td>${{ sale.total_amount }}</td>
+                                    <td>{{ sale.get_payment_method_display }}</td>
+                                    <td>
+                                        <a href="{% url 'pharmacy:sale_detail' sale.id %}" 
+                                           class="btn btn-sm btn-info">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center">No purchase history</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

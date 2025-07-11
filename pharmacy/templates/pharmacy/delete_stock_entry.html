@@ -1,0 +1,28 @@
+{% extends 'pharmacy/base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-6 mx-auto">
+            <div class="card">
+                <div class="card-body">
+                    <h3 class="card-title mb-4">Delete Stock Entry</h3>
+                    <p>Are you sure you want to delete the following stock entry for {{ medicine.name }}?</p>
+                    
+                    <div class="alert alert-warning">
+                        <p><strong>Quantity:</strong> {{ stock_entry.quantity }}</p>
+                        <p><strong>Expiry Date:</strong> {{ stock_entry.expiration_date|date:"Y-m-d" }}</p>
+                    </div>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-danger">Yes, Delete</button>
+                        <a href="{% url 'pharmacy:update_stock' medicine.barcode_number %}" 
+                           class="btn btn-secondary">Cancel</a>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

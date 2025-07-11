@@ -1,0 +1,387 @@
+{% extends 'pharmacy/base.html' %}
+
+{% block content %}
+<!-- Main content -->
+<div class="container-fluid mt-4">
+    <!-- Customer Selection Card -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-8">
+                    <label for="customer-select" class="form-label">Select Customer</label>
+                    <select id="customer-select" class="form-control select2" style="width: 100%;">
+                        {% if selected_customer %}
+                            <option value="{{ selected_customer.id }}" selected>
+                                {{ selected_customer.name }} ({{ selected_customer.phone }}) - Points: {{ selected_customer.points }}
+                            </option>
+                        {% endif %}
+                    </select>
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <a href="{% url 'pharmacy:customer_add' %}" class="btn btn-success">
+                        <i class="fas fa-plus"></i> New Customer
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Left Side - Product Entry -->
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h3>Point of Sale</h3>
+                    <form method="post" action="{% url 'pharmacy:pos_add_to_cart' %}" class="mb-4">
+                        {% csrf_token %}
+                        <input type="hidden" name="customer_id" id="form-customer-id" value="{{ selected_customer.id|default:'' }}">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="form-group">
+                                    <label for="barcode">Scan Barcode</label>
+                                    <input type="text" name="barcode" id="barcode" class="form-control" required autofocus>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="quantity">Quantity</label>
+                                    <input type="number" name="quantity" id="quantity" class="form-control" value="1" min="1" required>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="unit_type">Unit Type</label>
+                                    <select name="unit_type" id="unit_type" class="form-control">
+                                        <option value="BOX">Box</option>
+                                        <option value="STRIP">Strip</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-plus"></i> Add to Cart
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Cart Items -->
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Unit Type</th>
+                                    <th>Original Price</th>
+                                    <th>Discounted Price</th>
+                                    <th>Quantity</th>
+                                    <th>Total</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in cart %}
+                                <tr>
+                                    <td>{{ item.name }}</td>
+                                    <td>{{ item.unit_type }}</td>
+                                    <td>${{ item.original_price|floatformat:2 }}</td>
+                                    <td>${{ item.discounted_price|floatformat:2 }}</td>
+                                    <td>{{ item.quantity }}</td>
+                                    <td>${{ item.total|floatformat:2 }}</td>
+                                    <td>
+                                        <form method="post" action="{% url 'pharmacy:pos_remove_item' forloop.counter0 %}" style="display: inline;">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-danger">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            {% if cart %}
+                            <tfoot>
+                                <tr>
+                                    <td colspan="5" class="text-end"><strong>Original Total:</strong></td>
+                                    <td colspan="2">${{ original_total|floatformat:2 }}</td>
+                                </tr>
+                                {% if selected_customer %}
+                                <tr>
+                                    <td colspan="5" class="text-end">
+                                        <strong>Discount ({{ selected_customer.get_customer_type_display }}):</strong>
+                                    </td>
+                                    <td colspan="2">
+                                        {% if selected_customer.customer_type == 'FAMILY' %}
+                                        Cost + 10% only
+                                        {% else %}
+                                        {{ selected_customer.discount_percentage }}%
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endif %}
+                                <tr class="table-primary">
+                                    <td colspan="5" class="text-end"><strong>Final Total:</strong></td>
+                                    <td colspan="2"><strong>${{ cart_total|floatformat:2 }}</strong></td>
+                                </tr>
+                            </tfoot>
+                            {% endif %}
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Side - Payment -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h4>Sale Summary</h4>
+                    <div class="mb-4">
+                        <h2 class="text-primary">Total: $<span id="totalAmount">{{ cart_total|floatformat:2 }}</span></h2>
+                    </div>
+
+                    <form method="post" action="{% url 'pharmacy:pos_complete_sale' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="customer_id" id="selected-customer-id" value="{{ selected_customer.id|default:'' }}">
+                        
+                        <div class="form-group mb-3">
+                            <label>Payment Method</label>
+                            <div class="btn-group w-100" role="group">
+                                <input type="radio" class="btn-check" name="payment_method" id="cash" value="CASH" checked>
+                                <label class="btn btn-outline-primary" for="cash">
+                                    <i class="fas fa-money-bill-wave"></i> Cash
+                                </label>
+
+                                <input type="radio" class="btn-check" name="payment_method" id="card" value="CARD">
+                                <label class="btn btn-outline-primary" for="card">
+                                    <i class="fas fa-credit-card"></i> Card
+                                </label>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-success btn-lg w-100" {% if not cart %}disabled{% endif %}>
+                            <i class="fas fa-check-circle"></i> Complete Sale
+                        </button>
+                    </form>
+
+                    <div class="mt-3">
+                        <button class="btn btn-danger w-100" id="cancelSale">
+                            <i class="fas fa-times-circle"></i> Cancel Sale
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Print styles -->
+<style type="text/css" media="print">
+    @page {
+        size: 80mm auto;
+        margin: 0;
+    }
+    body * {
+        visibility: hidden;
+    }
+    #receipt, #receipt * {
+        visibility: visible;
+    }
+    #receipt {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 76mm;
+        font-size: 10px;
+        padding: 2mm;
+    }
+    .no-print {
+        display: none !important;
+    }
+    .receipt-items {
+        margin: 3mm 0;
+    }
+    h4 {
+        margin: 0 0 3mm 0;
+        font-size: 14px;
+    }
+    p {
+        margin: 2mm 0;
+    }
+</style>
+
+<!-- Receipt Modal -->
+{% if show_receipt %}
+<div class="modal fade" id="receiptModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header no-print">
+                <h5 class="modal-title">Sale Completed</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="receipt">
+                    <h4 class="text-center">Elesraa Pharmacy</h4>
+                    <p class="text-center" style="margin-bottom: 5mm;">Receipt #{{ completed_sale.id }}</p>
+                    {% if completed_sale.customer %}
+                    <p class="text-center">Customer: {{ completed_sale.customer }}</p>
+                    {% endif %}
+                    <hr>
+                    <div class="receipt-items">
+                        {% for item in completed_items %}
+                        <div class="d-flex justify-content-between">
+                            <span style="width: 70%;">{{ item.name }} × {{ item.quantity }} {{ item.unit_type }}</span>
+                            <span style="width: 30%; text-align: left;">${{ item.total|floatformat:2 }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <hr>
+                    {% if completed_sale.discounts_applied %}
+                    <div class="mb-2">
+                        <div class="d-flex justify-content-between">
+                            <span>Original Total:</span>
+                            <span>${{ completed_sale.original_total|floatformat:2 }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>{{ completed_sale.customer_type }} - {{ completed_sale.discount_info }}</span>
+                        </div>
+                    </div>
+                    {% endif %}
+                    <div class="d-flex justify-content-between" style="font-weight: bold; margin-bottom: 5mm;">
+                        <span>Final Total:</span>
+                        <span>${{ completed_sale.total|floatformat:2 }}</span>
+                    </div>
+                    {% if completed_sale.customer and completed_sale.points_added %}
+                    <div class="text-center" style="font-size: 11px; margin-bottom: 3mm;">
+                        <p>+ {{ completed_sale.points_added }} Loyalty Points</p>
+                    </div>
+                    {% endif %}
+                    <div class="text-center" style="font-size: 11px;">
+                        <p>Thank you!</p>
+                        <p>{{ completed_sale.created_at|date:"Y/m/d H:i" }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer no-print">
+                <button type="button" class="btn btn-primary" onclick="window.print()">
+                    <i class="fas fa-print"></i> Print
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="window.location.reload()">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    new bootstrap.Modal(document.getElementById('receiptModal')).show();
+});
+</script>
+{% endif %}
+
+<!-- General JavaScript -->
+<script>
+$(document).ready(function() {
+    // Initialize Select2 for customer search
+    $('#customer-select').select2({
+        placeholder: 'Search customer by name or phone...',
+        allowClear: true,
+        ajax: {
+            url: "{% url 'pharmacy:customer_search' %}",
+            dataType: 'json',
+            delay: 250,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            data: function(params) {
+                return {
+                    term: params.term || ''
+                };
+            },
+            processResults: function(data) {
+                return {
+                    results: data.results.map(function(item) {
+                        return {
+                            id: item.id,
+                            text: item.text + ' - Points: ' + item.points
+                        };
+                    })
+                };
+            },
+            cache: true
+        }
+    }).on('select2:select', function(e) {
+        var customerId = e.params.data.id;
+        $('#selected-customer-id').val(customerId);
+        $('#form-customer-id').val(customerId);
+        
+        // Store customer ID in session via AJAX
+        $.post("{% url 'pharmacy:pos' %}", {
+            'customer_id': customerId,
+            'csrfmiddlewaretoken': '{{ csrf_token }}'
+        }, function() {
+            // Reload page to update all prices with new customer
+            window.location.reload();
+        });
+    }).on('select2:unselect', function() {
+        $('#selected-customer-id').val('');
+        $('#form-customer-id').val('');
+        
+        // Clear customer from session and reload
+        $.post("{% url 'pharmacy:pos' %}", {
+            'customer_id': '',
+            'csrfmiddlewaretoken': '{{ csrf_token }}'
+        }, function() {
+            window.location.reload();
+        });
+    });
+
+    // Handle cancel sale
+    document.getElementById('cancelSale').addEventListener('click', function() {
+        if (confirm('Are you sure you want to cancel this sale?')) {
+            // Clear cart using POST request
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '{% url "pharmacy:pos" %}';
+            
+            var csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrfmiddlewaretoken';
+            csrfInput.value = '{{ csrf_token }}';
+            form.appendChild(csrfInput);
+
+            var actionInput = document.createElement('input');
+            actionInput.type = 'hidden';
+            actionInput.name = 'action';
+            actionInput.value = 'cancel';
+            form.appendChild(actionInput);
+
+            document.body.appendChild(form);
+            form.submit();
+        }
+    });
+
+    // Auto-focus barcode input
+    document.getElementById('barcode').focus();
+});
+</script>
+
+<style>
+.select2-container {
+    width: 100% !important;
+}
+
+.select2-container .select2-selection--single {
+    height: 38px;
+    border: 1px solid #ced4da;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 38px;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 36px;
+}
+</style>
+{% endblock %}

@@ -1,0 +1,311 @@
+:root {
+    --primary-color: #2c3e50;      /* Dark blue */
+    --secondary-color: #3498db;    /* Light blue */
+}
+
+html, body {
+    overflow-x: hidden;  /* منع التمرير الأفقي */
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f8f9fa;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f8f9fa;
+}
+
+/* تنسيقات الناف بار */
+.navbar {
+    background: linear-gradient(135deg, #2c3e50, #3498db);
+    padding: 0.5rem 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    width: 100%;
+    overflow: visible !important;
+}
+
+.navbar > .container {
+    padding-left: 0;  /* تقليل المسافة من اليسار */
+    margin-left: 0;   /* تقليل الهامش من اليسار */
+    overflow: visible !important;
+}
+
+.navbar-brand {
+    color: white !important;
+    font-size: 1.4rem;
+    font-weight: bold;
+    padding: 0.5rem 1rem;
+    white-space: nowrap;
+    padding-left: 0.5rem;  /* تقليل المسافة للشعار */
+}
+
+.navbar-nav {
+    margin-left: -0.5rem;  /* تحريك القائمة قليلاً لليسار */
+}
+
+.nav-link {
+    color: rgba(255,255,255,0.9) !important;
+    transition: all 0.3s ease;
+    padding: 0.5rem 0.6rem !important;  /* تقليل المسافات بين عناصر القائمة */
+    font-size: 0.95rem;
+    white-space: nowrap;
+}
+
+.nav-link:hover {
+    color: white !important;
+    transform: translateY(-2px);
+}
+
+.nav-link.active {
+    color: white !important;
+    font-weight: 500;
+    position: relative;
+}
+
+.nav-link.active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60%;
+    height: 2px;
+    background-color: white;
+    border-radius: 2px;
+}
+
+.main-container {
+    min-height: calc(100vh - 76px);
+    padding: 2rem 0;
+}
+
+.card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    transition: transform 0.3s ease;
+    background-color: white;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+}
+
+.bg-primary {
+    background-color: var(--primary-color) !important;
+}
+
+.text-primary {
+    color: var(--secondary-color) !important;
+}
+
+.btn-primary {
+    background-color: var(--secondary-color);
+    border-color: var(--secondary-color);
+}
+
+.btn-primary:hover {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.badge.bg-primary {
+    background-color: var(--secondary-color) !important;
+}
+
+footer {
+    background: linear-gradient(135deg, var(--secondary-color), var(--primary-color));
+    color: white !important;
+}
+
+footer a {
+    color: white !important;
+    transition: opacity 0.3s ease;
+}
+
+footer a:hover {
+    color: white !important;
+    opacity: 0.8;
+}
+
+/* Animation for cards */
+.card {
+    animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Hover effects for social links */
+.social-links a {
+    transition: transform 0.3s ease;
+    display: inline-block;
+}
+
+.social-links a:hover {
+    transform: translateY(-3px);
+}
+
+/* List group animations */
+.list-group-item {
+    transition: all 0.3s ease;
+}
+
+.list-group-item:hover {
+    background-color: #f8f9fa;
+    transform: translateX(5px);
+}
+
+/* تحسينات للشاشات الصغيرة والمتوسطة */
+@media (max-width: 991.98px) {
+    .navbar-collapse {
+        max-height: calc(100vh - 60px);
+        overflow-y: auto;
+    }
+
+    .navbar-nav {
+        padding: 0.5rem;
+    }
+
+    .nav-link {
+        font-size: 0.9rem;
+        padding: 0.4rem 0.6rem !important;
+    }
+
+    .navbar-nav .dropdown-menu {
+        max-width: 100%;
+        overflow-x: hidden;
+    }
+}
+
+/* تنسيقات عامة لمنع التمرير الأفقي */
+.container, 
+.container-fluid {
+    max-width: 100%;
+    padding-right: 15px;
+    padding-left: 15px;
+    overflow-x: hidden;
+}
+
+.row {
+    margin-right: 0;
+    margin-left: 0;
+}
+
+.table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+}
+
+/* Add these styles to your existing CSS */
+.form-label {
+    font-weight: 500;
+}
+
+input[type="text"],
+input[type="password"] {
+    width: 100%;
+    padding: 0.375rem 0.75rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    color: #212529;
+    background-color: #fff;
+    border: 1px solid #ced4da;
+    border-radius: 0.25rem;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+input[type="text"]:focus,
+input[type="password"]:focus {
+    border-color: var(--primary-color);
+    outline: 0;
+    box-shadow: 0 0 0 0.25rem rgba(44, 62, 80, 0.25);
+}
+
+.errorlist {
+    color: #dc3545;
+    list-style: none;
+    padding: 0;
+    margin: 0.25rem 0;
+    font-size: 0.875rem;
+}
+
+/* إزالة جميع التنسيقات السابقة للقوائم المنسدلة وإضافة تنسيقات جديدة مبسطة */
+
+/* Navbar Dropdown Styles */
+.navbar .dropdown {
+    position: static !important;
+}
+
+.navbar .dropdown-menu {
+    position: absolute !important;
+    left: auto;
+    margin-top: 0 !important;
+    background: #2c3e50;
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    padding: 0.5rem 0;
+    z-index: 1021;
+    min-width: 200px;
+}
+
+/* موقع قائمة التقارير */
+#reportsDropdown + .dropdown-menu {
+    transform: translateX(0) !important;
+    top: 100% !important;
+    left: auto !important;
+}
+
+/* موقع قائمة المستخدم */
+#userDropdown + .dropdown-menu {
+    transform: translateX(0) !important;
+    top: 100% !important;
+    right: 0 !important;
+    left: auto !important;
+}
+
+.dropdown-item {
+    padding: 0.7rem 1.5rem;
+    color: rgba(255,255,255,0.9) !important;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+}
+
+.dropdown-item:hover {
+    background-color: #3498db;
+    color: #ffffff !important;
+}
+
+.dropdown-divider {
+    border-color: rgba(255,255,255,0.1);
+    margin: 0.5rem 0;
+}
+
+@media (max-width: 991.98px) {
+    .navbar .dropdown-menu {
+        position: static !important;
+        float: none;
+        width: 100%;
+        margin: 0;
+        box-shadow: none;
+        background-color: rgba(0,0,0,0.1);
+    }
+}

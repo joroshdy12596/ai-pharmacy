@@ -1,0 +1,169 @@
+{% extends 'pharmacy/base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="mb-0">{% if form.instance.pk %}تعديل{% else %}إضافة{% endif %} دواء</h3>
+                </div>
+                <div class="card-body">
+                    <form method="post" enctype="multipart/form-data" class="row g-3">
+                        {% csrf_token %}
+                        
+                        <div class="col-md-6">
+                            <label class="form-label">اسم الدواء</label>
+                            {{ form.name }}
+                            {% if form.name.errors %}
+                                <div class="text-danger">{{ form.name.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">الباركود</label>
+                            {{ form.barcode_number }}
+                            {% if form.barcode_number.errors %}
+                                <div class="text-danger">{{ form.barcode_number.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label">الوصف</label>
+                            {{ form.description }}
+                            {% if form.description.errors %}
+                                <div class="text-danger">{{ form.description.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">التصنيف</label>
+                            {{ form.category }}
+                            {% if form.category.errors %}
+                                <div class="text-danger">{{ form.category.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">Box Price</label>
+                            {{ form.price }}
+                            {% if form.price.errors %}
+                                <div class="text-danger">{{ form.price.errors }}</div>
+                            {% endif %}
+                        </div>                        <div class="col-md-6">
+                            <label class="form-label">سعر الشريط</label>
+                            {{ form.strip_price }}
+                            {% if form.strip_price.errors %}
+                                <div class="text-danger">{{ form.strip_price.errors }}</div>
+                            {% endif %}
+                            <div class="form-text text-muted mt-1" id="calculatedStripPrice">
+                                السعر المحسوب: -- ج.م
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">حد إعادة الطلب</label>
+                            {{ form.reorder_level }}
+                            {% if form.reorder_level.errors %}
+                                <div class="text-danger">{{ form.reorder_level.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">عدد الأشرطة في العلبة</label>
+                            {{ form.strips_per_box }}
+                            {% if form.strips_per_box.errors %}
+                                <div class="text-danger">{{ form.strips_per_box.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-12">
+                            <div class="form-check">
+                                {{ form.can_sell_strips }}
+                                <label class="form-check-label">يمكن بيع أشرطة منفردة</label>
+                            </div>
+                            {% if form.can_sell_strips.errors %}
+                                <div class="text-danger">{{ form.can_sell_strips.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label">الصورة</label>
+                            {{ form.image }}
+                            {% if form.image.errors %}
+                                <div class="text-danger">{{ form.image.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-12 mt-4">
+                            <button type="submit" class="btn btn-primary">حفظ</button>
+                            <a href="{% url 'pharmacy:medicine_list' %}" class="btn btn-secondary">إلغاء</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.strip-price-preview {
+    font-size: 0.9rem;
+    padding: 5px 10px;
+    margin-top: 5px;
+    border-radius: 4px;
+    background-color: #f8f9fa;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const boxPriceInput = document.querySelector('input[name="price"]');
+    const stripsPerBoxInput = document.querySelector('input[name="strips_per_box"]');
+    const calculatedStripPriceDisplay = document.getElementById('calculatedStripPrice');
+    const canSellStripsCheckbox = document.querySelector('input[name="can_sell_strips"]');
+
+    function calculateAndDisplayStripPrice() {
+        if (boxPriceInput.value && stripsPerBoxInput.value) {
+            const boxPrice = parseFloat(boxPriceInput.value);
+            const stripsPerBox = parseInt(stripsPerBoxInput.value);
+            
+            if (stripsPerBox > 0 && boxPrice > 0) {
+                const calculatedPrice = (boxPrice / stripsPerBox).toFixed(2);
+                
+                // عرض السعر المحسوب
+                calculatedStripPriceDisplay.innerHTML = `
+                    <span class="h5 mb-0">${calculatedPrice} ج.م</span>
+                `;
+                return;
+            }
+        }
+        
+        // إذا لم تكن البيانات مكتملة
+        calculatedStripPriceDisplay.innerHTML = '<span class="h5 mb-0">-- ج.م</span>';
+    }
+
+    // تفعيل الحساب المباشر عند تغيير أي قيمة
+    boxPriceInput.addEventListener('input', calculateAndDisplayStripPrice);
+    stripsPerBoxInput.addEventListener('input', calculateAndDisplayStripPrice);
+
+    // التحكم في عرض/إخفاء سعر الشريط
+    canSellStripsCheckbox.addEventListener('change', function() {
+        if (!this.checked) {
+            calculatedStripPriceDisplay.innerHTML = '<span class="h5 mb-0">-- ج.م</span>';
+        } else {
+            calculateAndDisplayStripPrice();
+        }
+    });
+
+    // تهيئة الحالة الأولية
+    if (canSellStripsCheckbox.checked) {
+        calculateAndDisplayStripPrice();
+    }
+});
+</script>
+{% endblock %}

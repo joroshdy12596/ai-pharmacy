@@ -1,0 +1,372 @@
+{% extends 'pharmacy/base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h3>Update Stock for {{ medicine.name }}</h3>
+                    <div class="mb-3">
+                        <strong>Current Total Stock:</strong> {{ total_stock }}
+                    </div>
+                    
+                    <form method="post" id="stockForm">
+                        {% csrf_token %}
+                        <div id="stock-entries">
+                            <div class="stock-entry mb-3 border p-3 rounded">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Quantity</label>
+                                        <input type="number" name="quantity[]" class="form-control" min="1" required>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Expiration Date <span class="text-danger">*</span></label>
+                                        <div class="input-group">
+                                            <input type="text" 
+                                                   name="expiration_date_text[]" 
+                                                   class="form-control expiry-input" 
+                                                   placeholder="M/YY or use date picker" 
+                                                   pattern="^\d{1,2}/\d{2}$"
+                                                   title="Enter date as M/YY (e.g. 2/28) or use the date picker">
+                                            <input type="date" 
+                                                   name="expiration_date[]" 
+                                                   class="form-control date-picker" 
+                                                   required 
+                                                   min="{{ today|date:'Y-m-d' }}"
+                                                   style="display: none;">
+                                            <button type="button" class="btn btn-outline-secondary toggle-picker">
+                                                <i class="fas fa-calendar"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <button type="button" class="btn btn-secondary" id="add-more">
+                                <i class="fas fa-plus"></i> Add More Stock
+                            </button>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <button type="submit" class="btn btn-primary">Update Stock</button>
+                            <a href="{% url 'pharmacy:stock_scan' %}" class="btn btn-secondary">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h3>Stock History</h3>
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Date Added</th>
+                                <th>Quantity</th>
+                                <th>Expires</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for entry in stock_entries %}
+                            <tr data-entry-id="{{ entry.id }}">
+                                <td>{{ entry.created_at|date:"Y-m-d" }}</td>
+                                <td class="stock-quantity">{{ entry.quantity }}</td>
+                                <td>{{ entry.expiration_date|date:"Y-m-d" }}</td>
+                                <td>
+                                    {% if entry.expiration_date < today %}
+                                        <span class="badge bg-danger">Expired</span>
+                                    {% elif entry.expiration_date|timeuntil:today < '30 days' %}
+                                        <span class="badge bg-warning">Near Expiry</span>
+                                    {% else %}
+                                        <span class="badge bg-success">Good</span>
+                                    {% endif %}
+                                </td>
+                                <td>                                    <a href="{% url 'pharmacy:edit_stock_entry' entry.id %}" 
+                                       class="btn btn-sm btn-primary">
+                                        <i class="fas fa-edit"></i> Edit
+                                    </a>
+                                    <button type="button" 
+                                            class="btn btn-sm btn-danger ms-1"
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#deleteModal{{ entry.id }}">
+                                        <i class="fas fa-trash"></i> Delete
+                                    </button>
+                                    
+                                    <!-- Delete Modal -->
+                                    <div class="modal fade" id="deleteModal{{ entry.id }}" data-bs-keyboard="false" data-bs-backdrop="static" tabindex="-1">
+                                        <div class="modal-dialog">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title">Delete Stock Entry</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <p>Are you sure you want to delete the following stock entry for {{ medicine.name }}?</p>
+                                                    <div class="alert alert-warning">
+                                                        <p><strong>Quantity:</strong> {{ entry.quantity }}</p>
+                                                        <p class="mb-0"><strong>Expiry Date:</strong> {{ entry.expiration_date|date:"Y-m-d" }}</p>
+                                                    </div>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                    <button type="button" 
+                                                            class="btn btn-danger delete-confirm-btn" 
+                                                            data-entry-id="{{ entry.id }}"
+                                                            data-url="{% url 'pharmacy:delete_stock_entry' entry.id %}">
+                                                        Yes, Delete
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.modal.fade .modal-dialog {
+    transform: translate(0, 0) !important;
+    transition: transform 0.1s ease-out !important;
+}
+
+.stock-entry-row {
+    transition: opacity 0.3s ease-out;
+}
+
+.stock-entry-row.removing {
+    opacity: 0;
+}
+
+.modal-backdrop {
+    transition: opacity 0.1s ease !important;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const deleteButtons = document.querySelectorAll('.delete-confirm-btn');
+    
+    deleteButtons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            const url = this.dataset.url;
+            const entryId = this.dataset.entryId;
+            const modalElement = this.closest('.modal');
+            const modal = bootstrap.Modal.getInstance(modalElement);
+            const row = document.querySelector(`tr[data-entry-id="${entryId}"]`);
+            
+            // Disable the delete button to prevent double clicks
+            this.disabled = true;
+            this.innerHTML = 'Deleting...';
+            
+            // Create form data with CSRF token
+            const formData = new FormData();
+            formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+            
+            // Send POST request
+            fetch(url, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Smoothly fade out the row
+                    row.classList.add('removing');
+                    
+                    // Close modal and remove row after animation
+                    setTimeout(() => {
+                        modal.hide();
+                        
+                        // Update total stock count if needed
+                        const totalStockElement = document.querySelector('.total-stock');
+                        if (totalStockElement) {
+                            const currentTotal = parseInt(totalStockElement.textContent);
+                            const deletedQuantity = parseInt(row.querySelector('.stock-quantity').textContent);
+                            totalStockElement.textContent = currentTotal - deletedQuantity;
+                        }
+                        
+                        // Remove row after fadeout
+                        setTimeout(() => row.remove(), 100);
+                    }, 200);
+                    
+                } else if (data.error) {
+                    alert(data.error);
+                    // Re-enable button and restore text
+                    this.disabled = false;
+                    this.innerHTML = 'Yes, Delete';
+                    modal.hide();
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while deleting the entry');
+                // Re-enable button and restore text
+                this.disabled = false;
+                this.innerHTML = 'Yes, Delete';
+                modal.hide();
+            });
+        });
+    });
+
+    const stockEntries = document.getElementById('stock-entries');
+    const addMoreBtn = document.getElementById('add-more');
+    const form = document.getElementById('stockForm');
+    
+    // Function to handle M/YY date format conversion
+    function parseExpiryDate(value) {
+        if (!value) return null;
+        
+        // Check if input matches M/YY format
+        const match = value.match(/^(\d{1,2})\/(\d{2})$/);
+        if (match) {
+            const month = parseInt(match[1], 10);
+            const year = parseInt(`20${match[2]}`, 10);
+            
+            // Validate month and year
+            if (month >= 1 && month <= 12 && year >= 2000) {
+                // Set to 15th of the month
+                return `${year}-${month.toString().padStart(2, '0')}-15`;
+            }
+        }
+        return null;
+    }
+    
+    // Function to handle expiry input changes
+    function handleExpiryInput(input) {
+        const dateInput = input.closest('.input-group').querySelector('.date-picker');
+        const value = input.value.trim();
+        
+        if (value) {
+            const parsedDate = parseExpiryDate(value);
+            if (parsedDate) {
+                dateInput.value = parsedDate;
+                input.classList.remove('is-invalid');
+            } else {
+                dateInput.value = '';
+                input.classList.add('is-invalid');
+            }
+        } else {
+            dateInput.value = '';
+        }
+    }
+    
+    // Function to toggle between text input and date picker
+    function setupDateToggle(entry) {
+        const textInput = entry.querySelector('.expiry-input');
+        const dateInput = entry.querySelector('.date-picker');
+        const toggleBtn = entry.querySelector('.toggle-picker');
+        
+        toggleBtn.addEventListener('click', function() {
+            if (dateInput.style.display === 'none') {
+                textInput.style.display = 'none';
+                dateInput.style.display = 'block';
+                dateInput.focus();
+            } else {
+                textInput.style.display = 'block';
+                dateInput.style.display = 'none';
+                textInput.focus();
+            }
+        });
+        
+        textInput.addEventListener('input', function() {
+            handleExpiryInput(this);
+        });
+        
+        dateInput.addEventListener('change', function() {
+            if (this.value) {
+                const date = new Date(this.value);
+                textInput.value = `${date.getMonth() + 1}/${date.getFullYear().toString().slice(-2)}`;
+            } else {
+                textInput.value = '';
+            }
+        });
+    }
+    
+    // Setup handlers for initial entry
+    setupDateToggle(stockEntries.querySelector('.stock-entry'));
+    
+    // Add More button handler
+    addMoreBtn.addEventListener('click', function() {
+        const newEntry = document.createElement('div');
+        newEntry.className = 'stock-entry mb-3 border p-3 rounded';
+        newEntry.innerHTML = `
+            <div class="row">
+                <div class="col-md-6">
+                    <label class="form-label">Quantity</label>
+                    <input type="number" name="quantity[]" class="form-control" min="1" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Expiration Date <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <input type="text" 
+                               name="expiration_date_text[]" 
+                               class="form-control expiry-input" 
+                               placeholder="M/YY or use date picker"
+                               pattern="^\d{1,2}/\d{2}$"
+                               title="Enter date as M/YY (e.g. 2/28) or use the date picker">
+                        <input type="date" 
+                               name="expiration_date[]" 
+                               class="form-control date-picker" 
+                               required 
+                               min="{{ today|date:'Y-m-d' }}"
+                               style="display: none;">
+                        <button type="button" class="btn btn-outline-secondary toggle-picker">
+                            <i class="fas fa-calendar"></i>
+                        </button>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-danger btn-sm mt-2 remove-entry">
+                    <i class="fas fa-trash"></i> Remove
+                </button>
+            </div>
+        `;
+        
+        stockEntries.appendChild(newEntry);
+        setupDateToggle(newEntry);
+        
+        // Add remove functionality
+        newEntry.querySelector('.remove-entry').addEventListener('click', function() {
+            newEntry.remove();
+        });
+    });
+    
+    // Form submit handler
+    form.addEventListener('submit', function(e) {
+        const textInputs = form.querySelectorAll('.expiry-input');
+        let hasError = false;
+        
+        textInputs.forEach(input => {
+            if (input.style.display !== 'none' && input.value) {
+                if (!parseExpiryDate(input.value)) {
+                    input.classList.add('is-invalid');
+                    hasError = true;
+                }
+            }
+        });
+        
+        if (hasError) {
+            e.preventDefault();
+            alert('Please enter valid dates in M/YY format (e.g. 2/28) or use the date picker');
+        }
+    });
+});
+</script>
+{% endblock %}
