@@ -58,6 +58,15 @@
                                     </select>
                                 </div>
                             </div>
+            <!-- Expiration Date Dropdown (always in DOM, hidden by default) -->
+            <div class="col-md-4" id="expiration-date-group" style="display: none;">
+                <div class="form-group">
+                    <label for="expiration_date">Expiration Date</label>
+                    <select name="expiration_date" id="expiration_date" class="form-control">
+                        <option value="" disabled selected>Select expiration date</option>
+                    </select>
+                </div>
+            </div>
                         </div>
                         <div class="mt-3">
                             <button type="submit" class="btn btn-primary">
@@ -372,41 +381,194 @@ $(document).ready(function() {
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const barcodeInput = document.getElementById('barcode');
-    const expirationDiv = document.createElement('div');
-    expirationDiv.className = 'form-group';
-    expirationDiv.style.display = 'none';
-    expirationDiv.innerHTML = `
-        <label for="expiration_date">Expiration Date</label>
-        <select name="expiration_date" id="expiration_date" class="form-control"></select>
-    `;
+    const expirationDiv = document.getElementById('expiration-date-group');
+    const expSelect = document.getElementById('expiration_date');
     const form = document.getElementById('add-to-cart-form');
-    // Insert after barcode input for better UX
-    form.querySelector('.row').insertBefore(expirationDiv, form.querySelector('.row').children[1]);
+    expirationDiv.style.display = 'none';
+    expSelect.innerHTML = '';
+    multiExpRequired = false;
+    awaitingExpSelection = false;
+    ajaxInProgress = false;
 
-    barcodeInput.addEventListener('change', function() {
+    function fetchExpirationDates() {
         const barcode = barcodeInput.value;
-        const expSelect = document.getElementById('expiration_date');
         expirationDiv.style.display = 'none';
         expSelect.innerHTML = '';
+        multiExpRequired = false;
+        awaitingExpSelection = false;
+        ajaxInProgress = true;
         if (barcode) {
             fetch("{% url 'pharmacy:get_expiration_dates' %}?barcode=" + encodeURIComponent(barcode))
                 .then(response => response.json())
                 .then(data => {
+                    ajaxInProgress = false;
                     if (data.success && data.dates.length > 1) {
-                        expSelect.innerHTML = data.dates.map(date => `<option value="${date}">${date}</option>`).join('');
-                        expirationDiv.style.display = '';
+                        expSelect.innerHTML = '<option value="" disabled selected>Select expiration date</option>' + data.dates.map(date => `<option value="${date}">${date}</option>`).join('');
+                        expirationDiv.style.display = 'block';
+                        expSelect.style.display = 'block';
+                        expSelect.parentElement.style.display = 'block';
                         expSelect.required = true;
+                        multiExpRequired = true;
+                        awaitingExpSelection = true;
+                        barcodeInput.dataset.scanned = 'false';
+                        // Prevent form auto-submit by scanner
+                        return;
                     } else if (data.success && data.dates.length === 1) {
-                        // Only one date, add a hidden input so it is submitted
                         expirationDiv.style.display = 'none';
                         expSelect.required = false;
                         expSelect.innerHTML = `<option value="${data.dates[0]}" selected></option>`;
+                        multiExpRequired = false;
+                        awaitingExpSelection = false;
+                        // Directly submit the form if all requirements are met
+                        setTimeout(function() {
+                            if (!ajaxInProgress && !multiExpRequired && !awaitingExpSelection) {
+                                form.submit();
+                            }
+                        }, 0);
                     } else {
                         expirationDiv.style.display = 'none';
                         expSelect.required = false;
+                        multiExpRequired = false;
+                        awaitingExpSelection = false;
                     }
                 });
+        } else {
+            ajaxInProgress = false;
         }
+    }
+
+    barcodeInput.addEventListener('change', fetchExpirationDates);
+
+    // Also trigger fetch on Enter key (scanner)
+    barcodeInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            fetchExpirationDates();
+        }
+    });
+
+    // When expiration date is selected, allow form submission
+    document.getElementById('expiration_date').addEventListener('change', function() {
+        awaitingExpSelection = false;
+        // If a value is selected, submit the form if it was blocked
+        if (multiExpRequired && this.value) {
+            // Optionally, you can auto-submit here if desired:
+            // form.submit();
+        }
+    });
+    // Also allow submit if a default is already selected
+    document.getElementById('expiration_date').addEventListener('focus', function() {
+        if (multiExpRequired && this.value) {
+            awaitingExpSelection = false;
+        }
+    });
+
+    // Prevent Enter key in barcode input from submitting form if AJAX is in progress or selection is needed
+    barcodeInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            if (ajaxInProgress || awaitingExpSelection || multiExpRequired) {
+                e.preventDefault();
+                // If AJAX just finished, focus expiration dropdown
+                const expSelect = document.getElementById('expiration_date');
+                if (expSelect && expSelect.style.display !== 'none') {
+                    expSelect.focus();
+                }
+                return false;
+            }
+        }
+    });
+
+    // Detect if barcode was entered by scanner (quick input)
+    let barcodeBuffer = '';
+    let barcodeTimer = null;
+    barcodeInput.addEventListener('input', function(e) {
+        if (barcodeTimer) clearTimeout(barcodeTimer);
+        barcodeBuffer += e.data || '';
+        barcodeTimer = setTimeout(function() {
+            if (barcodeBuffer.length >= 6) {
+                barcodeInput.dataset.scanned = 'true';
+            } else {
+                barcodeInput.dataset.scanned = 'false';
+            }
+            barcodeBuffer = '';
+        }, 50);
+    });
+
+    // Block auto-submit by scanner if multiple expiration dates are required
+    barcodeInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            if (ajaxInProgress || awaitingExpSelection || multiExpRequired) {
+                e.preventDefault();
+                // If AJAX just finished, focus expiration dropdown
+                if (multiExpRequired && expirationDiv.style.display !== 'none') {
+                    expSelect.focus();
+                }
+                return false;
+            }
+        }
+    });
+
+    form.addEventListener('submit', async function(e) {
+        // Always get the static expiration dropdown
+        const expSelect = document.getElementById('expiration_date');
+        const expirationDiv = document.getElementById('expiration-date-group');
+        // If AJAX is in progress, or multiple expiration dates and none selected, block submit
+        if (ajaxInProgress || (multiExpRequired && (!expSelect.value || expirationDiv.style.display === 'none'))) {
+            e.preventDefault();
+            // Only show alert if there are multiple expiration dates
+            if (multiExpRequired) {
+                alert('Please select an expiration date before adding to cart.');
+            }
+            expSelect.focus();
+            return false;
+        }
+        // If awaiting expiration selection, block auto-submit
+        if (awaitingExpSelection) {
+            e.preventDefault();
+            expSelect.focus();
+            return false;
+        }
+        // --- NEW: If expirationDiv is hidden, check for expiration dates before allowing submit ---
+        if (expirationDiv.style.display === 'none' && barcodeInput.value) {
+            e.preventDefault();
+            ajaxInProgress = true;
+            const barcode = barcodeInput.value;
+            try {
+                const response = await fetch("{% url 'pharmacy:get_expiration_dates' %}?barcode=" + encodeURIComponent(barcode));
+                const data = await response.json();
+                ajaxInProgress = false;
+                if (data.success && data.dates.length > 1) {
+                    expSelect.innerHTML = data.dates.map(date => `<option value="${date}">${date}</option>`).join('');
+                    expirationDiv.style.display = 'block';
+                    expSelect.required = true;
+                    multiExpRequired = true;
+                    awaitingExpSelection = true;
+                    setTimeout(() => expSelect.focus(), 100);
+                    alert('Please select an expiration date before adding to cart.');
+                    return false;
+                } else if (data.success && data.dates.length === 1) {
+                    expirationDiv.style.display = 'none';
+                    expSelect.required = false;
+                    expSelect.innerHTML = `<option value="${data.dates[0]}" selected></option>`;
+                    multiExpRequired = false;
+                    awaitingExpSelection = false;
+                    form.submit(); // Now safe to submit
+                    return false;
+                } else {
+                    expirationDiv.style.display = 'none';
+                    expSelect.required = false;
+                    multiExpRequired = false;
+                    awaitingExpSelection = false;
+                    form.submit(); // No stock, let backend handle error
+                    return false;
+                }
+            } catch (err) {
+                ajaxInProgress = false;
+                alert('Error checking expiration dates. Please try again.');
+                return false;
+            }
+        }
+        barcodeInput.dataset.scanned = 'false';
     });
 });
 </script>
@@ -427,6 +589,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
 .select2-container--default .select2-selection--single .select2-selection__arrow {
     height: 36px;
+}
+
+// Add this CSS to ensure the expiration date dropdown is always visible when shown
+#expiration-date-group {
+    margin-top: 10px;
+}
+#expiration-date-group[style*="display: block"] {
+    display: flex !important;
+    flex-direction: column;
 }
 </style>
 {% endblock %}

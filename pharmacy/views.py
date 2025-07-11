@@ -472,27 +472,40 @@ def pos_complete_sale(request):
         completed_items = []
         for item in cart:
             medicine = Medicine.objects.get(id=item['medicine_id'])
-            
             # Calculate stock reduction
             if item['unit_type'] == 'STRIP':
                 stock_reduction = item['quantity'] / medicine.strips_per_box
             else:
                 stock_reduction = item['quantity']
-            
-            # Update stock
-            medicine.stock = F('stock') - stock_reduction
-            medicine.save()
-            
-            # Get earliest expiring stock entry
+
+            # Find the correct StockEntry by expiration date (should be in item['expiration_date'])
+            exp_date = item.get('expiration_date')
+            if not exp_date:
+                raise ValidationError(f'Expiration date missing for {medicine.name} in cart.')
+            # Parse date string if needed
+            if isinstance(exp_date, str):
+                try:
+                    exp_date_obj = timezone.datetime.strptime(exp_date, '%Y-%m-%d').date()
+                except Exception:
+                    exp_date_obj = timezone.datetime.strptime(exp_date, '%d/%m/%Y').date()
+            else:
+                exp_date_obj = exp_date
+
             stock_entry = StockEntry.objects.filter(
                 medicine=medicine,
-                quantity__gt=0,
-                expiration_date__gt=timezone.now().date()
-            ).order_by('expiration_date').first()
-            
+                expiration_date=exp_date_obj
+            ).first()
             if not stock_entry:
-                raise ValidationError(f'No valid stock entry found for {medicine.name}')
-            
+                raise ValidationError(f'No stock entry found for {medicine.name} with expiration {exp_date}')
+            if stock_entry.quantity < stock_reduction:
+                raise ValidationError(f'Not enough stock for {medicine.name} (exp {exp_date})')
+            # Decrement stock entry
+            stock_entry.quantity -= stock_reduction
+            stock_entry.save()
+
+            # After updating StockEntry, update overall stock
+            medicine.update_stock()
+
             # Create sale item with original and discounted prices
             sale_item = SaleItem.objects.create(
                 sale=sale,
@@ -1409,20 +1422,17 @@ def pos_add_to_cart(request):
             else:
                 box_quantity = quantity
 
-            # Check stock
+            # Only check for sufficient stock, do not deduct here
             if medicine.stock < box_quantity:
                 messages.error(request, 'Insufficient stock')
                 return redirect('pharmacy:pos')
 
-            # If expiration_date is provided, deduct from the correct StockEntry
+            # If expiration_date is provided, check that the StockEntry has enough, but do not deduct
             if expiration_date:
                 stock_entry = medicine.stock_entries.filter(expiration_date=expiration_date, quantity__gte=quantity).first()
                 if not stock_entry:
                     messages.error(request, 'Selected expiration date does not have enough stock')
                     return redirect('pharmacy:pos')
-                stock_entry.quantity -= quantity
-                stock_entry.save()
-                medicine.update_stock()
 
             # Calculate original unit price
             original_price = medicine.get_strip_price() if unit_type == 'STRIP' else medicine.price
