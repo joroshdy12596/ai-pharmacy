@@ -6,7 +6,7 @@
         <div class="col-md-6">
             <h2>Sale Details #{{ sale.id }}</h2>
         </div>
-        <div class="col-md-6 text-end">
+        <div class="col-md-6 text-end no-print">
             <a href="{% url 'pharmacy:sales_history' %}" class="btn btn-secondary">
                 <i class="fas fa-arrow-left"></i> Back to Sales
             </a>
@@ -15,49 +15,44 @@
             </button>
         </div>
     </div>
-
-    <div class="card">
-        <div class="card-body">
-            <!-- Sale Info -->
-            <div class="row mb-4">
-                <div class="col-md-6">
-                    <h5>Sale Information</h5>
-                    <p><strong>Date:</strong> {{ sale.created_at|date:"F d, Y H:i" }}</p>
-                    <p><strong>Payment Method:</strong> {{ sale.payment_method }}</p>
-                    <p><strong>Cashier:</strong> {{ sale.user.username }}</p>
-                </div>
+    <div id="receipt-area">
+        <div style="width: 80mm; margin: 0 auto; font-size: 13px; font-family: 'Courier New', Courier, monospace;">
+            <div style="text-align: center; margin-bottom: 10px;">
+                <strong>Elersraa Pharmacy</strong><br>
+                <span style="font-size: 11px;">Receipt</span>
             </div>
-
-            <!-- Items Table -->
-            <div class="table-responsive">
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>Product</th>
-                            <th>Price</th>
-                            <th>Quantity</th>
-                            <th>Subtotal</th>
-                            <th>Expiry Date</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in items %}
-                        <tr>
-                            <td>{{ item.medicine.name }}</td>
-                            <td>${{ item.price }}</td>
-                            <td>{{ item.quantity }}</td>
-                            <td>${{ item.subtotal }}</td>
-                            <td>{{ item.expiry_date|date:"F d, Y" }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                    <tfoot>
-                        <tr>
-                            <td colspan="3" class="text-end"><strong>Total:</strong></td>
-                            <td colspan="2"><strong>${{ total }}</strong></td>
-                        </tr>
-                    </tfoot>
-                </table>
+            <div>
+                <span>Date: {{ sale.created_at|date:"Y-m-d H:i" }}</span><br>
+                <span>Cashier: {{ sale.user.username }}</span><br>
+                <span>Payment: {{ sale.payment_method }}</span>
+            </div>
+            <hr style="margin: 6px 0;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="border-bottom: 1px dashed #000; font-size: 12px;">
+                        <th style="text-align:left;">Item</th>
+                        <th style="text-align:right;">Qty</th>
+                        <th style="text-align:right;">Price</th>
+                        <th style="text-align:right;">Sub</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                    <tr style="font-size: 12px;">
+                        <td style="text-align:left;">{{ item.medicine.name }}</td>
+                        <td style="text-align:right;">{{ item.quantity }}</td>
+                        <td style="text-align:right;">{{ item.price }}</td>
+                        <td style="text-align:right;">{{ item.subtotal }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <hr style="margin: 6px 0;">
+            <div style="text-align:right; font-size: 13px;">
+                <strong>Total: {{ total }}</strong>
+            </div>
+            <div style="text-align:center; margin-top: 10px; font-size: 11px;">
+                Thank you for your purchase!
             </div>
         </div>
     </div>
@@ -65,12 +60,28 @@
 
 <!-- Print Styles -->
 <style type="text/css" media="print">
-    .btn, .navbar {
+    body, html {
+        background: #fff !important;
+        margin: 0;
+        padding: 0;
+        width: 80mm !important;
+        min-width: 80mm !important;
+        max-width: 80mm !important;
+    }
+    .navbar, .footer, .no-print, .main-container, .container.mt-4 > .row.mb-4 {
         display: none !important;
     }
-    .container {
-        width: 100%;
-        max-width: none;
+    #receipt-area {
+        display: block !important;
+        width: 80mm !important;
+        min-width: 80mm !important;
+        max-width: 80mm !important;
+        margin: 0 auto !important;
+        padding: 0 !important;
+    }
+    @page {
+        size: 80mm 100mm;
+        margin: 0;
     }
 </style>
 {% endblock %} 

@@ -1,0 +1,28 @@
+{% extends 'pharmacy/base.html' %}
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h3 class="mb-4">Return Product</h3>
+                    <form method="post" action="{% url 'pharmacy:return_product' %}">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="barcode" class="form-label">Scan Product Barcode</label>
+                            <input type="text" class="form-control" id="barcode" name="barcode" required autofocus>
+                        </div>
+                        <button type="submit" class="btn btn-danger w-100">Confirm Return</button>
+                    </form>
+                    {% if error %}
+                        <div class="alert alert-danger mt-3">{{ error }}</div>
+                    {% endif %}
+                    {% if success %}
+                        <div class="alert alert-success mt-3">{{ success }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

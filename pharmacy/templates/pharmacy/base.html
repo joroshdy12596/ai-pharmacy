@@ -10,6 +10,30 @@
     <link href="{% static 'pharmacy/css/style.css' %}" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <style>
+        /* Reduce navbar font and icon size for more items to fit */
+        .navbar-nav .nav-link, .navbar-nav .dropdown-toggle, .navbar-brand {
+            font-size: 0.92rem !important;
+            padding-top: 0.3rem !important;
+            padding-bottom: 0.3rem !important;
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+        }
+        .navbar-nav .nav-link i, .navbar-brand i, .dropdown-menu .dropdown-item i {
+            font-size: 1rem !important;
+        }
+        .navbar-brand {
+            font-size: 1.05rem !important;
+        }
+        .navbar .dropdown-menu {
+            font-size: 0.92rem !important;
+        }
+        @media (max-width: 991.98px) {
+            .navbar-nav .nav-link, .navbar-nav .dropdown-toggle, .navbar-brand {
+                font-size: 0.98rem !important;
+            }
+        }
+    </style>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
 <body>
@@ -82,7 +106,12 @@
                             <i class="fas fa-history"></i> Sales
                         </a>
                     </li>
-                    
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'return_product' %}active{% endif %}" 
+                           href="{% url 'pharmacy:return_product' %}">
+                            <i class="fas fa-undo"></i> Return Product
+                        </a>
+                    </li>
                     <li class="nav-item">
                         <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" 
                            href="{% url 'pharmacy:dashboard' %}">

@@ -1,3 +1,50 @@
+from django.contrib.auth.decorators import login_required
+
+@login_required
+def return_product(request):
+    context = {}
+    if request.method == 'POST':
+        barcode = request.POST.get('barcode')
+        if not barcode:
+            context['error'] = 'Barcode is required.'
+            return render(request, 'pharmacy/return_product.html', context)
+        # Find the most recent sale item with this barcode
+        try:
+            medicine = Medicine.objects.get(barcode_number=barcode)
+        except Medicine.DoesNotExist:
+            context['error'] = 'No medicine found with this barcode.'
+            return render(request, 'pharmacy/return_product.html', context)
+
+        sale_item = SaleItem.objects.filter(medicine=medicine, sale__is_completed=True).order_by('-sale__created_at').first()
+        if not sale_item:
+            context['error'] = 'No completed sale found for this product.'
+            return render(request, 'pharmacy/return_product.html', context)
+
+        # Add back to stock (StockEntry)
+        stock_entry, created = StockEntry.objects.get_or_create(
+            medicine=medicine,
+            expiration_date=sale_item.expiry_date,
+            defaults={'quantity': 0}
+        )
+        stock_entry.quantity += sale_item.quantity
+        stock_entry.save()
+        medicine.update_stock()
+
+        # Save reference to parent sale before deleting item
+        parent_sale = sale_item.sale
+        # Remove the sale item (or mark as returned)
+        sale_item.delete()
+
+        # Recalculate sale total, and if no items left, set as not completed and zero amount
+        if parent_sale.items.exists():
+            parent_sale.calculate_total()
+        else:
+            parent_sale.total_amount = 0
+            parent_sale.is_completed = False
+            parent_sale.save()
+
+        context['success'] = f"Product '{medicine.name}' returned successfully. Stock and sales updated."
+    return render(request, 'pharmacy/return_product.html', context)
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required

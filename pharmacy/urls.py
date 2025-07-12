@@ -4,6 +4,7 @@ from . import views
 app_name = 'pharmacy'
 
 urlpatterns = [
+    path('return/', views.return_product, name='return_product'),
     path('', views.home, name='home'),
     path('medicines/', views.MedicineListView.as_view(), name='medicine_list'),
     path('medicine/<int:pk>/', views.MedicineDetailView.as_view(), name='medicine_detail'),
