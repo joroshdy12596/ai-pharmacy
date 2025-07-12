@@ -3,7 +3,8 @@
 {% block content %}
 <!-- Main content -->
 <div class="container-fluid mt-4">
-    <!-- Customer Selection Card -->
+    <!-- Customer Selection Card (hidden on POS page) -->
+    <!--
     <div class="card mb-4">
         <div class="card-body">
             <div class="row">
@@ -25,6 +26,7 @@
             </div>
         </div>
     </div>
+    -->
 
     <div class="row">
         <!-- Left Side - Product Entry -->
@@ -114,23 +116,17 @@
                                     <td colspan="5" class="text-end"><strong>Original Total:</strong></td>
                                     <td colspan="2">${{ original_total|floatformat:2 }}</td>
                                 </tr>
-                                {% if selected_customer %}
-                                <tr>
+                                <tr id="manual-discount-row" style="display:none;">
                                     <td colspan="5" class="text-end">
-                                        <strong>Discount ({{ selected_customer.get_customer_type_display }}):</strong>
+                                        <strong>Manual Discount:</strong>
                                     </td>
                                     <td colspan="2">
-                                        {% if selected_customer.customer_type == 'FAMILY' %}
-                                        Cost + 10% only
-                                        {% else %}
-                                        {{ selected_customer.discount_percentage }}%
-                                        {% endif %}
+                                        <span id="manual-discount-label"></span>
                                     </td>
                                 </tr>
-                                {% endif %}
                                 <tr class="table-primary">
                                     <td colspan="5" class="text-end"><strong>Final Total:</strong></td>
-                                    <td colspan="2"><strong>${{ cart_total|floatformat:2 }}</strong></td>
+                                    <td colspan="2"><strong id="final-total-label">${{ cart_total|floatformat:2 }}</strong></td>
                                 </tr>
                             </tfoot>
                             {% endif %}
@@ -152,21 +148,33 @@
                     <form method="post" action="{% url 'pharmacy:pos_complete_sale' %}">
                         {% csrf_token %}
                         <input type="hidden" name="customer_id" id="selected-customer-id" value="{{ selected_customer.id|default:'' }}">
-                        
-                        <div class="form-group mb-3">
-                            <label>Payment Method</label>
-                            <div class="btn-group w-100" role="group">
-                                <input type="radio" class="btn-check" name="payment_method" id="cash" value="CASH" checked>
-                                <label class="btn btn-outline-primary" for="cash">
-                                    <i class="fas fa-money-bill-wave"></i> Cash
-                                </label>
 
-                                <input type="radio" class="btn-check" name="payment_method" id="card" value="CARD">
-                                <label class="btn btn-outline-primary" for="card">
-                                    <i class="fas fa-credit-card"></i> Card
-                                </label>
-                            </div>
-                        </div>
+            <div class="form-group mb-3">
+                <label for="discount_percentage">Discount Percentage</label>
+                <select name="discount_percentage" id="discount_percentage" class="form-control">
+                    <option value="0">No Discount</option>
+                    <option value="1">1%</option>
+                    <option value="2">2%</option>
+                    <option value="3">3%</option>
+                    <option value="4">4%</option>
+                    <option value="5">5%</option>
+                </select>
+            </div>
+
+            <div class="form-group mb-3">
+                <label>Payment Method</label>
+                <div class="btn-group w-100" role="group">
+                    <input type="radio" class="btn-check" name="payment_method" id="cash" value="CASH" checked>
+                    <label class="btn btn-outline-primary" for="cash">
+                        <i class="fas fa-money-bill-wave"></i> Cash
+                    </label>
+
+                    <input type="radio" class="btn-check" name="payment_method" id="card" value="CARD">
+                    <label class="btn btn-outline-primary" for="card">
+                        <i class="fas fa-credit-card"></i> Card
+                    </label>
+                </div>
+            </div>
 
                         <button type="submit" class="btn btn-success btn-lg w-100" {% if not cart %}disabled{% endif %}>
                             <i class="fas fa-check-circle"></i> Complete Sale
@@ -252,7 +260,8 @@
                             <span>${{ completed_sale.original_total|floatformat:2 }}</span>
                         </div>
                         <div class="d-flex justify-content-between">
-                            <span>{{ completed_sale.customer_type }} - {{ completed_sale.discount_info }}</span>
+                            <span>Discount ({{ completed_sale.discount_percentage|floatformat:0 }}%):</span>
+                            <span>-${{ completed_sale.discount_amount|floatformat:2 }}</span>
                         </div>
                     </div>
                     {% endif %}
@@ -602,4 +611,33 @@ document.addEventListener('DOMContentLoaded', function() {
     flex-direction: column;
 }
 </style>
+<script>
+// Manual discount live update for cart summary
+// This must run after the DOM is loaded and after the discount dropdown is rendered
+// so it works for both page load and after cart changes
+
+document.addEventListener('DOMContentLoaded', function() {
+    const discountSelect = document.getElementById('discount_percentage');
+    const manualDiscountRow = document.getElementById('manual-discount-row');
+    const manualDiscountLabel = document.getElementById('manual-discount-label');
+    const finalTotalLabel = document.getElementById('final-total-label');
+    const totalAmountElem = document.getElementById('totalAmount');
+    if (!discountSelect || !manualDiscountRow || !manualDiscountLabel || !finalTotalLabel || !totalAmountElem) return;
+    function updateDiscount() {
+        const cartTotal = parseFloat(totalAmountElem.textContent);
+        const percent = parseFloat(discountSelect.value);
+        if (percent > 0) {
+            const discount = cartTotal * (percent / 100);
+            manualDiscountLabel.textContent = `-${discount.toFixed(2)} (${percent}%)`;
+            manualDiscountRow.style.display = '';
+            finalTotalLabel.textContent = `$${(cartTotal - discount).toFixed(2)}`;
+        } else {
+            manualDiscountRow.style.display = 'none';
+            finalTotalLabel.textContent = `$${cartTotal.toFixed(2)}`;
+        }
+    }
+    discountSelect.addEventListener('change', updateDiscount);
+    updateDiscount();
+});
+</script>
 {% endblock %}

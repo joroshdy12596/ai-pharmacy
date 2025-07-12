@@ -456,8 +456,17 @@ def pos_complete_sale(request):
         customer_id = request.POST.get('customer_id')
         customer = Customer.objects.get(id=customer_id) if customer_id else None
 
-        # Calculate total with discounts
-        total_amount = sum(float(item['total']) for item in cart)
+
+        # Apply manual discount percentage if provided
+        discount_percentage = 0
+        try:
+            discount_percentage = float(request.POST.get('discount_percentage', 0))
+        except Exception:
+            discount_percentage = 0
+
+        subtotal = sum(float(item['total']) for item in cart)
+        discount_amount = subtotal * (discount_percentage / 100)
+        total_amount = subtotal - discount_amount
 
         # Create sale record
         sale = Sale.objects.create(
@@ -544,12 +553,13 @@ def pos_complete_sale(request):
                 for item in completed_items
             ],
             'total': float(total_amount),
-            'discounts_applied': bool(customer and (customer.customer_type == 'FAMILY' or customer.discount_percentage > 0)),
+            'original_total': float(subtotal),
+            'discounts_applied': discount_percentage > 0,
+            'discount_percentage': discount_percentage,
+            'discount_amount': float(discount_amount),
             'customer_type': customer.get_customer_type_display() if customer else None,
             'discount_info': (
-                'سعر التكلفة + 10% فقط' if customer and customer.customer_type == 'FAMILY'
-                else f'خصم {customer.discount_percentage}%' if customer and customer.discount_percentage > 0
-                else None
+                f'Manual discount {discount_percentage}%' if discount_percentage > 0 else None
             )
         }
         
