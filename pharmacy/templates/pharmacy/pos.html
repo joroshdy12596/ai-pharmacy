@@ -411,6 +411,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         multiExpRequired = true;
                         awaitingExpSelection = true;
                         barcodeInput.dataset.scanned = 'false';
+                        // Move focus to expiration dropdown for user selection
+                        setTimeout(function() { expSelect.focus(); }, 0);
                         // Prevent form auto-submit by scanner
                         return;
                     } else if (data.success && data.dates.length === 1) {
