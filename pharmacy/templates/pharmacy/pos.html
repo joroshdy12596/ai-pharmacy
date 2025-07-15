@@ -140,9 +140,23 @@
         <div class="col-md-4">
             <div class="card">
                 <div class="card-body">
+
                     <h4>Sale Summary</h4>
                     <div class="mb-4">
                         <h2 class="text-primary">Total: $<span id="totalAmount">{{ cart_total|floatformat:2 }}</span></h2>
+                    </div>
+
+                    <!-- Cash Given and Change Calculation -->
+                    <div class="form-group mb-3">
+                        <label for="cashGiven">Cash Given</label>
+                        <div class="input-group">
+                            <input type="number" min="0" step="0.01" class="form-control" id="cashGiven" placeholder="Enter amount received" autocomplete="off">
+                            <button type="button" class="btn btn-warning" id="calcChangeBtn">Calculate Change</button>
+                        </div>
+                    </div>
+                    <div class="form-group mb-3">
+                        <label>Change to Return</label>
+                        <input type="text" class="form-control" id="changeToReturn" value="0.00">
                     </div>
 
                     <form method="post" action="{% url 'pharmacy:pos_complete_sale' %}">
@@ -227,7 +241,6 @@
     }
 </style>
 
-<!-- Receipt Modal -->
 {% if show_receipt %}
 <div class="modal fade" id="receiptModal" tabindex="-1">
     <div class="modal-dialog">
@@ -289,13 +302,68 @@
         </div>
     </div>
 </div>
+{% endif %}
 
+<!-- Cash Given and Change Calculation (robust, global function) - Always loaded on POS page -->
 <script>
+console.log('Change calculation JS loaded!');
+function updateChangeToReturn() {
+    var cashGivenInput = document.getElementById('cashGiven');
+    var changeToReturnInput = document.getElementById('changeToReturn');
+    var finalTotalLabel = document.getElementById('final-total-label');
+    if (!cashGivenInput || !changeToReturnInput || !finalTotalLabel) return;
+    // Ensure the field is enabled
+    changeToReturnInput.readOnly = false;
+    changeToReturnInput.disabled = false;
+    // Get the value from #final-total-label, strip $ if present
+    var totalText = finalTotalLabel.textContent.replace(/[$\s]/g, '');
+    var total = parseFloat(totalText);
+    if (isNaN(total)) {
+        try {
+            total = parseFloat('{{ cart_total|floatformat:2 }}');
+        } catch (e) { total = 0; }
+    }
+    var given = parseFloat(cashGivenInput.value);
+    if (isNaN(given)) given = 0;
+    var change = given - total;
+    // Debug: show values in console
+    console.log('Given:', given, 'Final Total:', total, 'Change:', change);
+    changeToReturnInput.value = change >= 0 ? change.toFixed(2) : '0.00';
+    // Force update for robustness
+    changeToReturnInput.dispatchEvent(new Event('change', { bubbles: true }));
+}
 document.addEventListener('DOMContentLoaded', function() {
-    new bootstrap.Modal(document.getElementById('receiptModal')).show();
+    var cashGivenInput = document.getElementById('cashGiven');
+    var totalAmountElem = document.getElementById('totalAmount');
+    var calcChangeBtn = document.getElementById('calcChangeBtn');
+    if (cashGivenInput) {
+        cashGivenInput.oninput = null;
+        cashGivenInput.onchange = null;
+        cashGivenInput.onkeyup = null;
+        cashGivenInput.onkeydown = null;
+    }
+    if (calcChangeBtn) {
+        calcChangeBtn.addEventListener('click', function() {
+            console.log('Calculate Change button clicked!');
+            updateChangeToReturn();
+            var changeToReturnInput = document.getElementById('changeToReturn');
+            if (changeToReturnInput) {
+                changeToReturnInput.focus();
+                changeToReturnInput.style.backgroundColor = '#ffe066';
+                setTimeout(function() {
+                    changeToReturnInput.style.backgroundColor = '';
+                }, 600);
+            }
+        });
+    }
+    if (totalAmountElem) {
+        const observer = new MutationObserver(updateChangeToReturn);
+        observer.observe(totalAmountElem, { childList: true, characterData: true, subtree: true });
+    }
+    // Initial calculation
+    updateChangeToReturn();
 });
 </script>
-{% endif %}
 
 <!-- General JavaScript -->
 <script>
@@ -624,20 +692,39 @@ document.addEventListener('DOMContentLoaded', function() {
     const totalAmountElem = document.getElementById('totalAmount');
     if (!discountSelect || !manualDiscountRow || !manualDiscountLabel || !finalTotalLabel || !totalAmountElem) return;
     function updateDiscount() {
-        const cartTotal = parseFloat(totalAmountElem.textContent);
+        // Always use the original cart total from the server, not the possibly already discounted value
+        let originalTotal = parseFloat(document.getElementById('final-total-label').getAttribute('data-original-total'));
+        if (isNaN(originalTotal) || originalTotal === 0) {
+            // Fallback to Django context variable if needed
+            try {
+                originalTotal = parseFloat('{{ original_total|floatformat:2 }}');
+            } catch (e) { originalTotal = 0; }
+        }
         const percent = parseFloat(discountSelect.value);
+        let discountedTotal = originalTotal;
         if (percent > 0) {
-            const discount = cartTotal * (percent / 100);
+            const discount = originalTotal * (percent / 100);
             manualDiscountLabel.textContent = `-${discount.toFixed(2)} (${percent}%)`;
             manualDiscountRow.style.display = '';
-            finalTotalLabel.textContent = `$${(cartTotal - discount).toFixed(2)}`;
+            discountedTotal = originalTotal - discount;
+            finalTotalLabel.textContent = `$${discountedTotal.toFixed(2)}`;
         } else {
             manualDiscountRow.style.display = 'none';
-            finalTotalLabel.textContent = `$${cartTotal.toFixed(2)}`;
+            finalTotalLabel.textContent = `$${originalTotal.toFixed(2)}`;
         }
+        // Update the right panel total
+        totalAmountElem.textContent = discountedTotal.toFixed(2);
+        // Only call the global function to update the change field
+        if (typeof updateChangeToReturn === 'function') updateChangeToReturn();
     }
     discountSelect.addEventListener('change', updateDiscount);
+    // Store the original total in a data attribute for reliable calculations
+    if (!finalTotalLabel.hasAttribute('data-original-total')) {
+        finalTotalLabel.setAttribute('data-original-total', totalAmountElem.textContent);
+    }
     updateDiscount();
+    // Fallback: recalculate change on page load
+    if (typeof updateChangeToReturn === 'function') updateChangeToReturn();
 });
 </script>
 {% endblock %}
