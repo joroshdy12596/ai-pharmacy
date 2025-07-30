@@ -1,5 +1,7 @@
 from django.urls import path, include
 from . import views
+from .views_most_sold import most_sold_products
+from .views_profit import profit_report
 
 app_name = 'pharmacy'
 
@@ -56,4 +58,6 @@ urlpatterns = [
     path('analytics/profit/', views.ProfitAnalyticsView.as_view(), name='profit_analytics'),
     path('products/search/', views.product_search, name='product_search'),
     path('stock/entry/<int:entry_id>/edit/', views.edit_stock_entry, name='edit_stock_entry'),
+    path('most-sold-products/', most_sold_products, name='most_sold_products'),
+    path('profit-report/', profit_report, name='profit_report'),
 ]

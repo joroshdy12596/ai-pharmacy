@@ -1486,10 +1486,19 @@ def pos_add_to_cart(request):
 
             # If expiration_date is provided, check that the StockEntry has enough, but do not deduct
             if expiration_date:
-                stock_entry = medicine.stock_entries.filter(expiration_date=expiration_date, quantity__gte=quantity).first()
+                stock_entry = medicine.stock_entries.filter(expiration_date=expiration_date).first()
                 if not stock_entry:
-                    messages.error(request, 'Selected expiration date does not have enough stock')
+                    messages.error(request, 'No stock for selected expiration date')
                     return redirect('pharmacy:pos')
+                if unit_type == 'STRIP':
+                    available_strips = stock_entry.quantity * medicine.strips_per_box
+                    if quantity > available_strips:
+                        messages.error(request, 'Selected expiration date does not have enough stock')
+                        return redirect('pharmacy:pos')
+                else:  # BOX
+                    if quantity > stock_entry.quantity:
+                        messages.error(request, 'Selected expiration date does not have enough stock')
+                        return redirect('pharmacy:pos')
 
             # Calculate original unit price
             original_price = medicine.get_strip_price() if unit_type == 'STRIP' else medicine.price

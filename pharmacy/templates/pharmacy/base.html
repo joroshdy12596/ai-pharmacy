@@ -164,6 +164,16 @@
                                     <i class="fas fa-users"></i> Customer Analytics
                                 </a>
                             </li>
+                            <li>
+                                <a class="dropdown-item" href="{% url 'pharmacy:most_sold_products' %}">
+                                    <i class="fas fa-star"></i> Most Sold Products
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{% url 'pharmacy:profit_report' %}">
+                                    <i class="fas fa-coins"></i> Profit Report (صافي الربح)
+                                </a>
+                            </li>
                         </ul>
                     </li>
                     
@@ -177,6 +187,13 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'pharmacy:product_search' %}">
                             <i class="fas fa-search"></i> Search Products
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'most_sold_products' %}active{% endif %}" 
+                           href="{% url 'pharmacy:most_sold_products' %}">
+                            <i class="fas fa-star"></i> Most Sold
                         </a>
                     </li>
                 </ul>
