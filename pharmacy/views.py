@@ -187,7 +187,8 @@ def update_stock(request):
             stock_entry = StockEntry.objects.create(
                 medicine=medicine,
                 quantity=quantity,
-                expiration_date=expiration_date
+                expiration_date=expiration_date,
+                strips_remaining=quantity * medicine.strips_per_box
             )
             print(f"Created stock entry: {stock_entry}")
             
@@ -302,6 +303,7 @@ def update_existing_stock(request, barcode):
         'medicine': medicine,
         'stock_entries': medicine.stock_entries.all().order_by('expiration_date'),
         'today': today,
+        'strips_in_stock': medicine.strips_in_stock,
     }
     return render(request, 'pharmacy/update_existing_stock.html', context)
 
@@ -528,13 +530,6 @@ def pos_complete_sale(request):
         completed_items = []
         for item in cart:
             medicine = Medicine.objects.get(id=item['medicine_id'])
-            # Calculate stock reduction
-            if item['unit_type'] == 'STRIP':
-                stock_reduction = item['quantity'] / medicine.strips_per_box
-            else:
-                stock_reduction = item['quantity']
-
-            # Find the correct StockEntry by expiration date (should be in item['expiration_date'])
             exp_date = item.get('expiration_date')
             if not exp_date:
                 raise ValidationError(f'Expiration date missing for {medicine.name} in cart.')
@@ -553,16 +548,32 @@ def pos_complete_sale(request):
             ).first()
             if not stock_entry:
                 raise ValidationError(f'No stock entry found for {medicine.name} with expiration {exp_date}')
-            if stock_entry.quantity < stock_reduction:
-                raise ValidationError(f'Not enough stock for {medicine.name} (exp {exp_date})')
-            # Decrement stock entry
-            stock_entry.quantity -= stock_reduction
+
+
+            if item['unit_type'] == 'STRIP':
+                # تحقق من توفر الشرائط الفعلية
+                if stock_entry.strips_remaining is None:
+                    stock_entry.strips_remaining = stock_entry.quantity * medicine.strips_per_box
+                if item['quantity'] > stock_entry.strips_remaining:
+                    raise ValidationError(f'Not enough strips for {medicine.name} (exp {exp_date})')
+                stock_entry.strips_remaining -= item['quantity']
+                # إذا تم استهلاك كل الشرائط، قلل عدد الصناديق أيضاً
+                stock_entry.quantity = stock_entry.strips_remaining // medicine.strips_per_box
+            else:
+                # تحقق من توفر الصناديق
+                if item['quantity'] > stock_entry.quantity:
+                    raise ValidationError(f'Not enough boxes for {medicine.name} (exp {exp_date})')
+                stock_entry.quantity -= item['quantity']
+                # عند بيع صندوق، يجب أيضاً خصم الشرائط المرتبطة
+                if stock_entry.strips_remaining is None:
+                    stock_entry.strips_remaining = stock_entry.quantity * medicine.strips_per_box
+                stock_entry.strips_remaining = stock_entry.quantity * medicine.strips_per_box
             stock_entry.save()
 
-            # After updating StockEntry, update overall stock
+            # بعد تحديث StockEntry، حدث المخزون الكلي
             medicine.update_stock()
 
-            # Create sale item with original and discounted prices
+            # أنشئ عنصر البيع
             sale_item = SaleItem.objects.create(
                 sale=sale,
                 medicine=medicine,

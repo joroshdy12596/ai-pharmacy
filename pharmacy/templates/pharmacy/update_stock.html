@@ -8,7 +8,8 @@
                 <div class="card-body">
                     <h3>Update Stock for {{ medicine.name }}</h3>
                     <div class="mb-3">
-                        <strong>Current Total Stock:</strong> {{ total_stock }}
+                        <strong>Current Total Stock:</strong> {{ total_stock }} صندوق<br>
+                        <span style="font-size:12px;color:#555;">{% if strips_in_stock is not None %}{{ strips_in_stock }}{% else %}0{% endif %} شريط متبقي</span>
                     </div>
                     
                     <form method="post" id="stockForm">
@@ -77,7 +78,10 @@
                             {% for entry in stock_entries %}
                             <tr data-entry-id="{{ entry.id }}">
                                 <td>{{ entry.created_at|date:"Y-m-d" }}</td>
-                                <td class="stock-quantity">{{ entry.quantity }}</td>
+                                <td class="stock-quantity">
+                                    {{ entry.quantity }} صندوق<br>
+                                    <span style="font-size:12px;color:#555;">{% if entry.strips_remaining is not None %}{{ entry.strips_remaining }}{% else %}{{ entry.quantity|default:0|add:0 }} × {{ medicine.strips_per_box }} شريط متبقي{% endif %}</span>
+                                </td>
                                 <td>{{ entry.expiration_date|date:"Y-m-d" }}</td>
                                 <td>
                                     {% if entry.expiration_date < today %}

@@ -100,6 +100,17 @@ class Sale(models.Model):
         return category_profits
 
 class Medicine(models.Model):
+    @property
+    def strips_in_stock(self):
+        """
+        Return total strips available (not expired) for this medicine
+        """
+        from django.utils import timezone
+        today = timezone.now().date()
+        total_strips = 0
+        for entry in self.stock_entries.filter(expiration_date__gte=today):
+            total_strips += entry.quantity * self.strips_per_box
+        return total_strips
     CATEGORY_CHOICES = [
         ('OTC', 'Over The Counter'),
         ('PRE', 'Prescription'),
@@ -240,6 +251,7 @@ class Medicine(models.Model):
 class StockEntry(models.Model):
     medicine = models.ForeignKey(Medicine, on_delete=models.CASCADE, related_name='stock_entries')
     quantity = models.IntegerField()
+    strips_remaining = models.IntegerField(null=True, blank=True, help_text="Actual strips remaining in this entry")
     expiration_date = models.DateField(null=False, blank=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
