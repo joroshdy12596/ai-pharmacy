@@ -103,13 +103,16 @@ class Medicine(models.Model):
     @property
     def strips_in_stock(self):
         """
-        Return total strips available (not expired) for this medicine
+        Return total strips available (not expired) for this medicine, using strips_remaining if set.
         """
         from django.utils import timezone
         today = timezone.now().date()
         total_strips = 0
         for entry in self.stock_entries.filter(expiration_date__gte=today):
-            total_strips += entry.quantity * self.strips_per_box
+            if entry.strips_remaining is not None:
+                total_strips += entry.strips_remaining
+            else:
+                total_strips += entry.quantity * self.strips_per_box
         return total_strips
     CATEGORY_CHOICES = [
         ('OTC', 'Over The Counter'),

@@ -542,44 +542,44 @@ def pos_complete_sale(request):
             else:
                 exp_date_obj = exp_date
 
-            stock_entry = StockEntry.objects.filter(
-                medicine=medicine,
-                expiration_date=exp_date_obj
-            ).first()
+            # For STRIP, allow stock entry with quantity=0 but strips_remaining > 0
+            if item['unit_type'] == 'STRIP':
+                stock_entry = StockEntry.objects.filter(
+                    medicine=medicine,
+                    expiration_date=exp_date_obj
+                ).first()
+            else:
+                stock_entry = StockEntry.objects.filter(
+                    medicine=medicine,
+                    expiration_date=exp_date_obj
+                ).first()
             if not stock_entry:
                 raise ValidationError(f'No stock entry found for {medicine.name} with expiration {exp_date}')
 
-
             if item['unit_type'] == 'STRIP':
-                # تحقق من توفر الشرائط الفعلية
                 if stock_entry.strips_remaining is None:
                     stock_entry.strips_remaining = stock_entry.quantity * medicine.strips_per_box
                 if item['quantity'] > stock_entry.strips_remaining:
                     raise ValidationError(f'Not enough strips for {medicine.name} (exp {exp_date})')
                 stock_entry.strips_remaining -= item['quantity']
-                # إذا تم استهلاك كل الشرائط، قلل عدد الصناديق أيضاً
                 stock_entry.quantity = stock_entry.strips_remaining // medicine.strips_per_box
             else:
-                # تحقق من توفر الصناديق
                 if item['quantity'] > stock_entry.quantity:
                     raise ValidationError(f'Not enough boxes for {medicine.name} (exp {exp_date})')
                 stock_entry.quantity -= item['quantity']
-                # عند بيع صندوق، يجب أيضاً خصم الشرائط المرتبطة
                 if stock_entry.strips_remaining is None:
                     stock_entry.strips_remaining = stock_entry.quantity * medicine.strips_per_box
-                stock_entry.strips_remaining = stock_entry.quantity * medicine.strips_per_box
+                stock_entry.strips_remaining -= item['quantity'] * medicine.strips_per_box
             stock_entry.save()
 
-            # بعد تحديث StockEntry، حدث المخزون الكلي
             medicine.update_stock()
 
-            # أنشئ عنصر البيع
             sale_item = SaleItem.objects.create(
                 sale=sale,
                 medicine=medicine,
                 quantity=item['quantity'],
                 unit_type=item['unit_type'],
-                price=item['discounted_price'],  # Store the discounted price
+                price=item['discounted_price'],
                 expiry_date=stock_entry.expiration_date
             )
             completed_items.append(sale_item)
@@ -1491,9 +1491,20 @@ def pos_add_to_cart(request):
                 box_quantity = quantity
 
             # Only check for sufficient stock, do not deduct here
-            if medicine.stock < box_quantity:
-                messages.error(request, 'Insufficient stock')
-                return redirect('pharmacy:pos')
+            if unit_type == 'STRIP':
+                total_strips = 0
+                for entry in medicine.stock_entries.filter(expiration_date__gte=timezone.now().date()):
+                    if entry.strips_remaining is not None:
+                        total_strips += entry.strips_remaining
+                    else:
+                        total_strips += entry.quantity * medicine.strips_per_box
+                if quantity > total_strips:
+                    messages.error(request, 'Insufficient stock')
+                    return redirect('pharmacy:pos')
+            else:
+                if medicine.stock < box_quantity:
+                    messages.error(request, 'Insufficient stock')
+                    return redirect('pharmacy:pos')
 
             # If expiration_date is provided, check that the StockEntry has enough, but do not deduct
             if expiration_date:
@@ -1502,7 +1513,7 @@ def pos_add_to_cart(request):
                     messages.error(request, 'No stock for selected expiration date')
                     return redirect('pharmacy:pos')
                 if unit_type == 'STRIP':
-                    available_strips = stock_entry.quantity * medicine.strips_per_box
+                    available_strips = stock_entry.strips_remaining if stock_entry.strips_remaining is not None else stock_entry.quantity * medicine.strips_per_box
                     if quantity > available_strips:
                         messages.error(request, 'Selected expiration date does not have enough stock')
                         return redirect('pharmacy:pos')
