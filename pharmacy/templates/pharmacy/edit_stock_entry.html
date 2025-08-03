@@ -20,6 +20,16 @@
                                    required>
                         </div>
                         <div class="form-group mb-3">
+                            <label for="strips_remaining" class="form-label">Strips Remaining</label>
+                            <input type="number"
+                                   id="strips_remaining"
+                                   name="strips_remaining"
+                                   class="form-control"
+                                   min="0"
+                                   value="{{ stock_entry.strips_remaining }}"
+                                   required>
+                        </div>
+                        <div class="form-group mb-3">
                             <label for="expiration_date" class="form-label">Expiration Date</label>
                             <input type="date" 
                                    id="expiration_date" 

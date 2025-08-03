@@ -12,6 +12,13 @@
                             <label for="barcode" class="form-label">Scan Product Barcode</label>
                             <input type="text" class="form-control" id="barcode" name="barcode" required autofocus>
                         </div>
+                        <div class="mb-3">
+                            <label for="unit_type" class="form-label">Unit Type</label>
+                            <select class="form-control" id="unit_type" name="unit_type" required>
+                                <option value="BOX">Box</option>
+                                <option value="STRIP">Strip</option>
+                            </select>
+                        </div>
                         <button type="submit" class="btn btn-danger w-100">Confirm Return</button>
                     </form>
                     {% if error %}

@@ -5,19 +5,20 @@ def return_product(request):
     context = {}
     if request.method == 'POST':
         barcode = request.POST.get('barcode')
+        unit_type = request.POST.get('unit_type', 'BOX')  # Read unit_type from POST data
         if not barcode:
             context['error'] = 'Barcode is required.'
             return render(request, 'pharmacy/return_product.html', context)
-        # Find the most recent sale item with this barcode
+        # Find the most recent sale item with this barcode and unit_type
         try:
             medicine = Medicine.objects.get(barcode_number=barcode)
         except Medicine.DoesNotExist:
             context['error'] = 'No medicine found with this barcode.'
             return render(request, 'pharmacy/return_product.html', context)
 
-        sale_item = SaleItem.objects.filter(medicine=medicine, sale__is_completed=True).order_by('-sale__created_at').first()
+        sale_item = SaleItem.objects.filter(medicine=medicine, sale__is_completed=True, unit_type=unit_type).order_by('-sale__created_at').first()
         if not sale_item:
-            context['error'] = 'No completed sale found for this product.'
+            context['error'] = 'No completed sale found for this product and unit type.'
             return render(request, 'pharmacy/return_product.html', context)
 
         # Add back to stock (StockEntry)
@@ -26,7 +27,20 @@ def return_product(request):
             expiration_date=sale_item.expiry_date,
             defaults={'quantity': 0}
         )
-        stock_entry.quantity += sale_item.quantity
+        if sale_item.unit_type == 'STRIP':
+            # Add strips back to strips_remaining
+            if stock_entry.strips_remaining is None:
+                stock_entry.strips_remaining = stock_entry.quantity * medicine.strips_per_box
+            stock_entry.strips_remaining += sale_item.quantity
+            # Update box quantity based on strips
+            stock_entry.quantity = stock_entry.strips_remaining // medicine.strips_per_box
+        else:
+            # Add boxes back
+            stock_entry.quantity += sale_item.quantity
+            # Also update strips_remaining
+            if stock_entry.strips_remaining is None:
+                stock_entry.strips_remaining = stock_entry.quantity * medicine.strips_per_box
+            stock_entry.strips_remaining += sale_item.quantity * medicine.strips_per_box
         stock_entry.save()
         medicine.update_stock()
 
@@ -1772,30 +1786,33 @@ def edit_stock_entry(request, entry_id):
     
     if request.method == 'POST':
         new_quantity = request.POST.get('quantity')
+        new_strips_remaining = request.POST.get('strips_remaining')
         new_expiration_date = request.POST.get('expiration_date')
-        
+
         try:
             new_quantity = int(new_quantity)
+            new_strips_remaining = int(new_strips_remaining)
             new_exp_date = timezone.datetime.strptime(new_expiration_date, '%Y-%m-%d').date()
-            
+
             # Validate expiration date
             if new_exp_date <= today:
                 messages.error(request, 'Expiration date must be in the future')
                 return redirect('pharmacy:update_stock', barcode=medicine.barcode_number)
-            
+
             # Update the stock entry
             stock_entry.quantity = new_quantity
+            stock_entry.strips_remaining = new_strips_remaining
             stock_entry.expiration_date = new_exp_date
             stock_entry.save()
-            
+
             # Update total stock
             medicine.update_stock()
-            
+
             messages.success(request, f'Successfully updated stock entry for {medicine.name}')
             return redirect('pharmacy:update_stock', barcode=medicine.barcode_number)
-            
+
         except (ValueError, TypeError):
-            messages.error(request, 'Invalid quantity or expiration date format')
+            messages.error(request, 'Invalid quantity, strips, or expiration date format')
             return redirect('pharmacy:update_stock', barcode=medicine.barcode_number)
     
     context = {
