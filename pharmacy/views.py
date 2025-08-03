@@ -1854,7 +1854,12 @@ def get_expiration_dates(request):
     barcode = request.GET.get('barcode')
     try:
         medicine = Medicine.objects.get(barcode_number=barcode)
-        stock_entries = medicine.stock_entries.filter(quantity__gt=0, expiration_date__gte=timezone.now().date())
+        # For strips, include entries with strips_remaining > 0
+        stock_entries = medicine.stock_entries.filter(
+            expiration_date__gte=timezone.now().date()
+        ).filter(
+            Q(quantity__gt=0) | Q(strips_remaining__gt=0)
+        )
         dates = [entry.expiration_date.strftime('%Y-%m-%d') for entry in stock_entries]
         return JsonResponse({'success': True, 'dates': dates})
     except Medicine.DoesNotExist:

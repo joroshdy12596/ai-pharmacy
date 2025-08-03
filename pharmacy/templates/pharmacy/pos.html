@@ -498,12 +498,19 @@ document.addEventListener('DOMContentLoaded', function() {
                         expSelect.innerHTML = `<option value="${data.dates[0]}" selected></option>`;
                         multiExpRequired = false;
                         awaitingExpSelection = false;
-                        // Directly submit the form if all requirements are met
-                        setTimeout(function() {
-                            if (!ajaxInProgress && !multiExpRequired && !awaitingExpSelection) {
-                                form.submit();
-                            }
-                        }, 0);
+                        expSelect.value = data.dates[0]; // Ensure value is set
+                        // Set hidden input for expiration_date if needed
+                        let hiddenExpInput = document.getElementById('hidden_expiration_date');
+                        if (!hiddenExpInput) {
+                            hiddenExpInput = document.createElement('input');
+                            hiddenExpInput.type = 'hidden';
+                            hiddenExpInput.id = 'hidden_expiration_date';
+                            hiddenExpInput.name = 'expiration_date';
+                            form.appendChild(hiddenExpInput);
+                        }
+                        hiddenExpInput.value = data.dates[0];
+                        form.submit(); // Now safe to submit
+                        return false;
                     } else {
                         expirationDiv.style.display = 'none';
                         expSelect.required = false;
@@ -631,6 +638,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     expSelect.innerHTML = `<option value="${data.dates[0]}" selected></option>`;
                     multiExpRequired = false;
                     awaitingExpSelection = false;
+                    expSelect.value = data.dates[0]; // Ensure value is set
+                    // Set hidden input for expiration_date if needed
+                    let hiddenExpInput = document.getElementById('hidden_expiration_date');
+                    if (!hiddenExpInput) {
+                        hiddenExpInput = document.createElement('input');
+                        hiddenExpInput.type = 'hidden';
+                        hiddenExpInput.id = 'hidden_expiration_date';
+                        hiddenExpInput.name = 'expiration_date';
+                        form.appendChild(hiddenExpInput);
+                    }
+                    hiddenExpInput.value = data.dates[0];
                     form.submit(); // Now safe to submit
                     return false;
                 } else {
