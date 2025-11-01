@@ -125,18 +125,24 @@ class Command(BaseCommand):
                     
                     # Add stock entry for the quantity
                     if quantity > 0:
-                        # Create new stock entry
-                        stock_entry = StockEntry.objects.create(
+                        stock_entry, se_created = StockEntry.objects.get_or_create(
                             medicine=medicine,
-                            quantity=quantity,
-                            expiration_date=expiry_date
+                            expiration_date=expiry_date,
+                            defaults={'quantity': quantity, 'strips_remaining': quantity * medicine.strips_per_box}
                         )
-                        
+                        if not se_created:
+                            stock_entry.quantity = (stock_entry.quantity or 0) + quantity
+                            if stock_entry.strips_remaining is None:
+                                stock_entry.strips_remaining = stock_entry.quantity * medicine.strips_per_box
+                            else:
+                                stock_entry.strips_remaining = (stock_entry.strips_remaining or 0) + (quantity * medicine.strips_per_box)
+                            stock_entry.save()
+
                         # Update medicine stock using the new calculation method
                         old_stock = medicine.stock
                         medicine.update_stock()
                         new_stock = medicine.stock
-                        
+
                         action = "Updated" if not created else "Created new"
                         self.stdout.write(
                             self.style.SUCCESS(

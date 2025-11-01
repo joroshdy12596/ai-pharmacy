@@ -260,6 +260,9 @@ class StockEntry(models.Model):
 
     class Meta:
         ordering = ['expiration_date']
+        constraints = [
+            models.UniqueConstraint(fields=['medicine', 'expiration_date'], name='unique_medicine_expiration')
+        ]
 
     def __str__(self):
         return f"{self.medicine.name} - {self.quantity} units (Expires: {self.expiration_date})"
