@@ -607,28 +607,39 @@ def pos_complete_sale(request):
             else:
                 exp_date_obj = exp_date
 
-            # Find stock entry for the given expiration date that has available quantity
-            stock_entry = select_stock_entry_for_expiration(medicine, exp_date_obj, item['unit_type'], item['quantity'])
-            if not stock_entry:
-                raise ValidationError(f'No stock entry with available quantity found for {medicine.name} with expiration {exp_date}')
+            # Use a DB transaction and row-level lock to avoid race conditions when decrementing stock
+            from django.db import transaction
+            from .models import StockEntry as _StockEntry
 
-            if item['unit_type'] == 'STRIP':
-                if stock_entry.strips_remaining is None:
-                    stock_entry.strips_remaining = stock_entry.quantity * medicine.strips_per_box
-                if item['quantity'] > stock_entry.strips_remaining:
-                    raise ValidationError(f'Not enough strips for {medicine.name} (exp {exp_date})')
-                stock_entry.strips_remaining -= item['quantity']
-                stock_entry.quantity = stock_entry.strips_remaining // medicine.strips_per_box
-            else:
-                if item['quantity'] > stock_entry.quantity:
-                    raise ValidationError(f'Not enough boxes for {medicine.name} (exp {exp_date})')
-                stock_entry.quantity -= item['quantity']
-                if stock_entry.strips_remaining is None:
-                    stock_entry.strips_remaining = stock_entry.quantity * medicine.strips_per_box
-                stock_entry.strips_remaining -= item['quantity'] * medicine.strips_per_box
-            stock_entry.save()
+            with transaction.atomic():
+                # Pick a candidate stock entry (prefers one with stock), then lock it for update
+                candidate = select_stock_entry_for_expiration(medicine, exp_date_obj, item['unit_type'], item['quantity'])
+                if not candidate:
+                    raise ValidationError(f'No stock entry with available quantity found for {medicine.name} with expiration {exp_date}')
 
-            medicine.update_stock()
+                # Reload the candidate with select_for_update to lock the row
+                stock_entry = _StockEntry.objects.select_for_update().get(id=candidate.id)
+
+                if item['unit_type'] == 'STRIP':
+                    if stock_entry.strips_remaining is None:
+                        stock_entry.strips_remaining = stock_entry.quantity * medicine.strips_per_box
+                    if item['quantity'] > stock_entry.strips_remaining:
+                        raise ValidationError(f'Not enough strips for {medicine.name} (exp {exp_date})')
+                    stock_entry.strips_remaining -= item['quantity']
+                    stock_entry.quantity = stock_entry.strips_remaining // medicine.strips_per_box
+                else:
+                    if item['quantity'] > stock_entry.quantity:
+                        raise ValidationError(f'Not enough boxes for {medicine.name} (exp {exp_date})')
+                    stock_entry.quantity -= item['quantity']
+                    if stock_entry.strips_remaining is None:
+                        stock_entry.strips_remaining = stock_entry.quantity * medicine.strips_per_box
+                    stock_entry.strips_remaining -= item['quantity'] * medicine.strips_per_box
+
+                # Save locked row; model save() will clamp negatives if any
+                stock_entry.save()
+
+                # Recalculate medicine stock within the same transaction to keep consistency
+                medicine.update_stock()
 
             sale_item = SaleItem.objects.create(
                 sale=sale,

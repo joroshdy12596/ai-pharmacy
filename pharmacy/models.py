@@ -10,6 +10,7 @@ from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from decimal import Decimal
+import logging
 
 class Customer(models.Model):
     CUSTOMER_TYPE_CHOICES = [
@@ -266,6 +267,25 @@ class StockEntry(models.Model):
 
     def __str__(self):
         return f"{self.medicine.name} - {self.quantity} units (Expires: {self.expiration_date})"
+
+    def save(self, *args, **kwargs):
+        """Clamp negative quantities/strips to zero and log if found.
+        This prevents negative stock values from being persisted.
+        """
+        logger = logging.getLogger(__name__)
+        if self.quantity is None:
+            self.quantity = 0
+        if self.quantity < 0:
+            logger.warning(f'StockEntry {getattr(self, "id", "new")} had negative quantity {self.quantity}; clamping to 0')
+            self.quantity = 0
+        if self.strips_remaining is None:
+            # leave as None (computed from quantity when needed)
+            pass
+        else:
+            if self.strips_remaining < 0:
+                logger.warning(f'StockEntry {getattr(self, "id", "new")} had negative strips_remaining {self.strips_remaining}; clamping to 0')
+                self.strips_remaining = 0
+        super().save(*args, **kwargs)
 
     def clean(self):
         if self.expiration_date and self.expiration_date < timezone.now().date():
