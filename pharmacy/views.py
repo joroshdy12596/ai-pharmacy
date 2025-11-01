@@ -556,17 +556,13 @@ def pos_complete_sale(request):
             else:
                 exp_date_obj = exp_date
 
-            # For STRIP, allow stock entry with quantity=0 but strips_remaining > 0
-            if item['unit_type'] == 'STRIP':
-                stock_entry = StockEntry.objects.filter(
-                    medicine=medicine,
-                    expiration_date=exp_date_obj
-                ).first()
-            else:
-                stock_entry = StockEntry.objects.filter(
-                    medicine=medicine,
-                    expiration_date=exp_date_obj
-                ).first()
+            # Find stock entry for the given expiration date that has available quantity
+            stock_entry = StockEntry.objects.filter(
+                medicine=medicine,
+                expiration_date=exp_date_obj
+            ).filter(
+                Q(quantity__gt=0) | Q(strips_remaining__gt=0)
+            ).first()
             if not stock_entry:
                 raise ValidationError(f'No stock entry found for {medicine.name} with expiration {exp_date}')
 
@@ -1522,7 +1518,11 @@ def pos_add_to_cart(request):
 
             # If expiration_date is provided, check that the StockEntry has enough, but do not deduct
             if expiration_date:
-                stock_entry = medicine.stock_entries.filter(expiration_date=expiration_date).first()
+                stock_entry = medicine.stock_entries.filter(
+                    expiration_date=expiration_date
+                ).filter(
+                    Q(quantity__gt=0) | Q(strips_remaining__gt=0)
+                ).first()
                 if not stock_entry:
                     messages.error(request, 'No stock for selected expiration date')
                     return redirect('pharmacy:pos')
