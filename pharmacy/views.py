@@ -418,21 +418,22 @@ def update_stock(request, barcode):
                     if exp_date <= today:
                         messages.error(request, 'Expiration date must be in the future')
                         return redirect('pharmacy:update_stock', barcode=barcode)
-                    
-                        if quantity > 0:
-                            stock_entry, created = StockEntry.objects.get_or_create(
-                                medicine=medicine,
-                                expiration_date=exp_date,
-                                defaults={'quantity': quantity, 'strips_remaining': quantity * medicine.strips_per_box}
-                            )
-                            if not created:
-                                stock_entry.quantity = (stock_entry.quantity or 0) + quantity
-                                if stock_entry.strips_remaining is None:
-                                    stock_entry.strips_remaining = stock_entry.quantity * medicine.strips_per_box
-                                else:
-                                    stock_entry.strips_remaining = (stock_entry.strips_remaining or 0) + (quantity * medicine.strips_per_box)
-                                stock_entry.save()
-                            total_added += quantity
+
+                    # Only create/merge stock entries when quantity > 0
+                    if quantity > 0:
+                        stock_entry, created = StockEntry.objects.get_or_create(
+                            medicine=medicine,
+                            expiration_date=exp_date,
+                            defaults={'quantity': quantity, 'strips_remaining': quantity * medicine.strips_per_box}
+                        )
+                        if not created:
+                            stock_entry.quantity = (stock_entry.quantity or 0) + quantity
+                            if stock_entry.strips_remaining is None:
+                                stock_entry.strips_remaining = stock_entry.quantity * medicine.strips_per_box
+                            else:
+                                stock_entry.strips_remaining = (stock_entry.strips_remaining or 0) + (quantity * medicine.strips_per_box)
+                        stock_entry.save()
+                        total_added += quantity
                 except (ValueError, TypeError):
                     messages.error(request, 'Invalid quantity or expiration date format')
                     return redirect('pharmacy:update_stock', barcode=barcode)
