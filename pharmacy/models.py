@@ -326,11 +326,27 @@ class SaleItem(models.Model):
     @property 
     def profit(self):
         """Calculate profit for this sale item"""
+        # Compute profit using the actual sold price (after any customer discount)
+        # minus the purchase cost per unit. This ensures profit reflects actual
+        # transaction price rather than the medicine's default price field.
+        # Use the actual recorded unit price on the SaleItem (the price charged)
+        # rather than recalculating discounts from the customer, because the
+        # stored `price` reflects the real transaction amount.
+        try:
+            sold_price = Decimal(str(self.price))
+        except Exception:
+            sold_price = Decimal('0')
+
         if self.unit_type == 'STRIP':
-            unit_profit = self.medicine.get_strip_profit()
-        else:  # BOX
-            unit_profit = self.medicine.get_profit_per_unit()
-        return unit_profit * self.quantity
+            # purchase cost per strip
+            spb = self.medicine.strips_per_box or 1
+            purchase_per_strip = (self.medicine.purchase_price or Decimal('0')) / Decimal(spb)
+            unit_cost = Decimal(purchase_per_strip)
+        else:
+            unit_cost = Decimal(self.medicine.purchase_price or Decimal('0'))
+
+        unit_profit = sold_price - unit_cost
+        return unit_profit * Decimal(self.quantity)
     
     @property
     def profit_margin_percentage(self):

@@ -49,6 +49,8 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
+    # enforce basic auth for /reports/ urls when configured
+    "Elesraa.middleware.ReportsBasicAuthMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
@@ -140,3 +142,12 @@ LOGOUT_REDIRECT_URL = 'pharmacy:home'
 
 OPENAI_API_KEY = 'your-api-key-here'  # Remember to keep this secret in production
 HUGGINGFACE_API_KEY = os.environ.get('HUGGINGFACE_API_KEY')
+
+# Basic auth for /reports/ (leave empty to disable or override via env)
+REPORTS_BASIC_AUTH_USER = os.getenv('REPORTS_BASIC_AUTH_USER', '')
+# default password requested (you requested this value) - can be overridden via env
+REPORTS_BASIC_AUTH_PASS = os.getenv('REPORTS_BASIC_AUTH_PASS', 'yarb442442')
+REPORTS_BASIC_AUTH_REALM = os.getenv('REPORTS_BASIC_AUTH_REALM', 'Reports')
+# TTL for reports auth (seconds). After this many seconds users will be re-challenged.
+REPORTS_BASIC_AUTH_TTL = int(os.getenv('REPORTS_BASIC_AUTH_TTL', '300'))  # default 5 minutes
+

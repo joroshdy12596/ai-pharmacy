@@ -1,0 +1,70 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Reports Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .card { border: 1px solid #ddd; padding: 12px; margin-bottom: 12px; border-radius: 6px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #eee; padding: 6px; text-align: left; }
+        th { background: #f7f7f7; }
+        .top { display:flex; gap:12px; }
+        .top .card { flex:1 }
+    </style>
+</head>
+<body>
+    <h1>تقارير - ملخص المبيعات والمخزون</h1>
+
+    <div class="top">
+        <div class="card">
+            <h3>إجمالي المبيعات (المسجلة)</h3>
+            <p>مبلغ المبيعات: <strong>{{ total_sold }}</strong></p>
+            <p>مجموع الربح (تاريخي): <strong>{{ total_profit_sold }}</strong></p>
+            {% if from_date or to_date %}
+            <p>النطاق: {{ from_date|default:'بدون' }} — {{ to_date|default:'بدون' }}</p>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <h3>قيمة المخزون الحالي (محتسب)</h3>
+            <p>قيمة البيع المحتملة: <strong>{{ total_inv_selling }}</strong></p>
+            <p>تكلفة البضاعة في المخزون: <strong>{{ total_inv_cost }}</strong></p>
+            <p>المكسب المتوقع من المخزون: <strong>{{ total_inv_profit }}</strong></p>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>تفاصيل أمثلة من المخزون (أول 200)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>id</th>
+                    <th>المنتج</th>
+                    <th>قطع (علب)</th>
+                    <th>قطع (شرائط)</th>
+                    <th>قيمة بيع العلب</th>
+                    <th>تكلفة العلب</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in inv_rows %}
+                <tr>
+                    <td>{{ r.id }}</td>
+                    <td>{{ r.name }}</td>
+                    <td>{{ r.box_qty }}</td>
+                    <td>{{ r.strip_qty }}</td>
+                    <td>{{ r.total_selling_box }}</td>
+                    <td>{{ r.total_cost_box }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6">لا يوجد مخزون حالياً</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <p style="font-size:0.9em;color:#666">ملاحظة: الأرقام محسوبة من سجلات المبيعات وسجلات المخزون الحالية. لتفاصيل أوسع استخدم فلاتر التاريخ أو ربط CSV.</p>
+</body>
+</html>
