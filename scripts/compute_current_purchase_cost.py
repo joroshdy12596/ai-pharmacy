@@ -38,11 +38,16 @@ def compute(write_csv_path=None):
         except Exception:
             box_qty = int(m.stock or 0)
 
+        # Compute strips not already counted as full boxes
         try:
-            strip_qty = int(m.strips_in_stock or 0)
+            total_strips = int(m.strips_in_stock or 0)
         except Exception:
             strips_per_box = m.strips_per_box or 1
-            strip_qty = box_qty * strips_per_box if box_qty else 0
+            total_strips = box_qty * strips_per_box if box_qty else 0
+        strips_per_box = m.strips_per_box or 1
+        strip_qty = total_strips - (box_qty * strips_per_box)
+        if strip_qty < 0:
+            strip_qty = 0
 
         box_purchase = Decimal(m.purchase_price or 0)
         strips_per_box = m.strips_per_box or 1

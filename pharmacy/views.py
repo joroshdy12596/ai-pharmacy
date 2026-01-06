@@ -938,7 +938,6 @@ class PurchaseCreateView(LoginRequiredMixin, RoleRequiredMixin, CreateView):
 def report_dashboard(request):
     return render(request, 'pharmacy/reports/dashboard.html')
 
-@login_required
 def sales_report(request):
     """Generate sales report"""
     # Get date range from request
@@ -1000,8 +999,53 @@ def sales_report(request):
 def inventory_report(request):
     medicines = Medicine.objects.all()
     
-    # Calculate inventory value using Decimal
-    total_value = sum(Decimal(str(medicine.stock)) * medicine.price for medicine in medicines)
+    # Calculate inventory value using Decimal (selling value)
+    total_value = sum(Decimal(str(medicine.stock)) * (medicine.price or Decimal('0')) for medicine in medicines)
+    
+    # Calculate total purchase cost and prepare inventory rows
+    total_purchase_cost = Decimal('0')
+    inventory_rows = []
+    for m in medicines:
+        try:
+            box_qty = int(m.calculate_available_stock() or 0)
+        except Exception:
+            box_qty = int(m.stock or 0)
+        # Compute strips not already counted as full boxes
+        try:
+            total_strips = int(m.strips_in_stock or 0)
+        except Exception:
+            total_strips = box_qty * (m.strips_per_box or 1) if box_qty else 0
+        strips_per_box = m.strips_per_box or 1
+        strip_qty = total_strips - (box_qty * strips_per_box)
+        if strip_qty < 0:
+            strip_qty = 0
+
+        unit_price = Decimal(m.price or 0)
+        unit_purchase = Decimal(m.purchase_price or 0)
+        strips_per_box = m.strips_per_box or 1
+        strip_purchase = (unit_purchase / Decimal(strips_per_box)) if strips_per_box else Decimal('0')
+
+        try:
+            strip_price = Decimal(m.get_strip_price() or unit_price)
+        except Exception:
+            strip_price = unit_price
+
+        total_value_item = (unit_price * Decimal(box_qty)) + (strip_price * Decimal(strip_qty))
+        total_purchase_item = (unit_purchase * Decimal(box_qty)) + (strip_purchase * Decimal(strip_qty))
+        total_purchase_cost += total_purchase_item
+
+        inventory_rows.append({
+            'id': m.id,
+            'barcode': m.barcode_number,
+            'name': m.name,
+            'category': m.get_category_display,
+            'stock': box_qty,
+            'unit_price': f"{unit_price:.2f}",
+            'unit_purchase': f"{unit_purchase:.2f}",
+            'total_value': f"{total_value_item:.2f}",
+            'total_purchase': f"{total_purchase_item:.2f}",
+            'reorder_level': m.reorder_level,
+        })
     
     # Low stock items
     low_stock = medicines.filter(stock__lte=F('reorder_level'))
@@ -1016,6 +1060,8 @@ def inventory_report(request):
     context = {
         'medicines': medicines,
         'total_value': total_value,
+        'total_purchase_cost': total_purchase_cost,
+        'inventory_rows': inventory_rows,
         'low_stock': low_stock,
         'stock_movement': stock_movement,
     }
@@ -1152,7 +1198,7 @@ def export_inventory_report(request):
     # Write headers
     writer.writerow([
         'Medicine Name', 'Category', 'Current Stock', 
-        'Unit Price', 'Total Value', 'Status'
+        'Unit Price', 'Total Value', 'Unit Purchase Price', 'Total Purchase Cost', 'Status'
     ])
     
     # Get all medicines
@@ -1160,15 +1206,33 @@ def export_inventory_report(request):
     
     # Write data
     for medicine in medicines:
-        status = 'Out of Stock' if medicine.stock == 0 else (
-            'Low Stock' if medicine.stock <= 10 else 'In Stock'
+        # Determine quantities (boxes and strips)
+        try:
+            box_qty = int(medicine.calculate_available_stock() or 0)
+        except Exception:
+            box_qty = int(medicine.stock or 0)
+        try:
+            strip_qty = int(medicine.strips_in_stock or 0)
+        except Exception:
+            strip_qty = box_qty * (medicine.strips_per_box or 1) if box_qty else 0
+
+        unit_purchase = Decimal(medicine.purchase_price or 0)
+        strips_per_box = medicine.strips_per_box or 1
+        strip_purchase = (unit_purchase / Decimal(strips_per_box)) if strips_per_box else Decimal('0')
+
+        total_purchase = (unit_purchase * Decimal(box_qty)) + (strip_purchase * Decimal(strip_qty))
+
+        status = 'Out of Stock' if (box_qty == 0 and strip_qty == 0) else (
+            'Low Stock' if box_qty <= 10 else 'In Stock'
         )
         writer.writerow([
             medicine.name,
             medicine.get_category_display(),
-            medicine.stock,
+            box_qty,
             medicine.price,
-            medicine.stock * medicine.price,
+            (Decimal(medicine.price or 0) * Decimal(box_qty)),
+            f"{unit_purchase:.2f}",
+            f"{total_purchase:.2f}",
             status
         ])
     
@@ -1793,19 +1857,30 @@ def barcode_print(request):
                 if price_y < 0:
                     price_y = 0
                 draw.text(((WIDTH_PX - price_w) // 2, price_y), PRICE, font=font, fill=0)
-                # Generate barcode image (suppress text inside barcode, match test script)
+                # Generate barcode image (suppress text inside barcode). Improve readability by
+                # increasing quiet zone/module height and using nearest-neighbor scaling so bars
+                # stay sharp for thermal printers and barcode scanners.
                 code128 = pybarcode.get('code128', BARCODE_VALUE, writer=ImageWriter())
-                barcode_img_path = code128.save("barcode_temp", options={"module_height": 8.0, "font_size": 10, "text_distance": 1, "quiet_zone": 1, "write_text": False})
-                barcode_width = WIDTH_PX - 30
+                # Use a larger module_height and quiet_zone; write_text False removes human-readable numbers
+                barcode_img_path = code128.save("barcode_temp", options={"module_height": 18.0, "font_size": 10, "text_distance": 1, "quiet_zone": 4, "write_text": False})
+
+                # Compute available barcode area and resize using NEAREST to preserve hard edges
+                barcode_width = WIDTH_PX - 20  # leave a small horizontal margin
                 barcode_height = HEIGHT_PX - (5 + pharmacy_h + 2 + product_h + 5 + price_h + 15) - 10
-                if barcode_height < 20:
-                    barcode_height = 20
-                barcode_img = Image.open(barcode_img_path).convert("L").resize((barcode_width, barcode_height))
-                # Enhance contrast: convert to pure black and white
-                barcode_img = barcode_img.point(lambda x: 0 if x < 128 else 255, '1').convert("L")
+                if barcode_height < 24:
+                    barcode_height = 24
+
+                # Load and resize using nearest neighbor to avoid anti-aliasing
+                barcode_img = Image.open(barcode_img_path).convert("L")
+                barcode_resized = barcode_img.resize((barcode_width, barcode_height), resample=Image.NEAREST)
+
+                # Convert to strict black & white (monochrome) to ensure printer prints solid bars
+                barcode_mono = barcode_resized.point(lambda x: 0 if x < 128 else 255, '1')
+                # Paste monochrome barcode onto label (convert to 'L' to match canvas mode)
+                barcode_paste = barcode_mono.convert("L")
                 barcode_y = 5 + pharmacy_h + 2 + product_h + 5
-                barcode_x = 36
-                image.paste(barcode_img, (barcode_x, barcode_y))
+                barcode_x = (WIDTH_PX - barcode_width) // 2
+                image.paste(barcode_paste, (barcode_x, barcode_y))
                 # Print to Windows printer
                 hDC = win32ui.CreateDC()
                 hDC.CreatePrinterDC(printer_name)

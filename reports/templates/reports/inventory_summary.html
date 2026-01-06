@@ -1,0 +1,44 @@
+{% extends 'pharmacy/base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-3">
+        <div class="col-md-8">
+            <h2>حالة المخزون — ملخص</h2>
+            <p>نظرة سريعة على إجمالي قيمة البيع، إجمالي تكلفة الشراء، والربح المتوقع.</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="{% url 'reports:inventory_cost' %}" class="btn btn-outline-secondary">
+                تفاصيل المخزون
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card text-white bg-primary mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">إجمالي قيمة البيع</h5>
+                    <p class="card-text" style="font-size:1.5rem">${{ total_selling }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-white bg-info mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">إجمالي تكلفة الشراء</h5>
+                    <p class="card-text" style="font-size:1.5rem">${{ total_purchase }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-white bg-success mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">الربح المتوقع</h5>
+                    <p class="card-text" style="font-size:1.5rem">${{ total_profit }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

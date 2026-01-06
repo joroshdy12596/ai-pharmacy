@@ -29,10 +29,15 @@ class Command(BaseCommand):
             except Exception:
                 box_qty = int(m.stock or 0)
 
+            # Compute strips not already counted as full boxes
             try:
-                strip_qty = int(m.strips_in_stock or 0)
+                total_strips = int(m.strips_in_stock or 0)
             except Exception:
-                strip_qty = box_qty * (m.strips_per_box or 1) if box_qty else 0
+                total_strips = box_qty * (m.strips_per_box or 1) if box_qty else 0
+            strips_per_box = m.strips_per_box or 1
+            strip_qty = total_strips - (box_qty * strips_per_box)
+            if strip_qty < 0:
+                strip_qty = 0
 
             box_price = Decimal(m.price or 0)
             box_purchase = Decimal(m.purchase_price or 0)

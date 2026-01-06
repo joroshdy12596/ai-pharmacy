@@ -16,7 +16,7 @@
 
     <!-- Summary Cards -->
     <div class="row mb-4">
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card bg-primary text-white">
                 <div class="card-body">
                     <h5 class="card-title">Total Products</h5>
@@ -24,7 +24,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card bg-success text-white">
                 <div class="card-body">
                     <h5 class="card-title">Total Value</h5>
@@ -32,7 +32,15 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Total Purchase Cost</h5>
+                    <h2 class="card-text">${{ total_purchase_cost|floatformat:2 }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
             <div class="card bg-warning text-dark">
                 <div class="card-body">
                     <h5 class="card-title">Low Stock Items</h5>
@@ -149,34 +157,38 @@
                             <th>Category</th>
                             <th>Current Stock</th>
                             <th>Unit Price</th>
+                            <th>Unit Purchase Price</th>
                             <th>Total Value</th>
+                            <th>Total Purchase Cost</th>
                             <th>Status</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for medicine in medicines %}
+                        {% for item in inventory_rows %}
                         <tr>
-                            <td>{{ medicine.name }}</td>
-                            <td>{{ medicine.get_category_display }}</td>
-                            <td>{{ medicine.stock }}</td>
-                            <td>${{ medicine.price }}</td>
-                            <td>${{ medicine.stock|multiply:medicine.price|floatformat:2 }}</td>
+                            <td>{{ item.name }}</td>
+                            <td>{{ item.category }}</td>
+                            <td>{{ item.stock }}</td>
+                            <td>${{ item.unit_price }}</td>
+                            <td>${{ item.unit_purchase }}</td>
+                            <td>${{ item.total_value }}</td>
+                            <td>${{ item.total_purchase }}</td>
                             <td>
-                                {% if medicine.stock == 0 %}
+                                {% if item.stock == 0 %}
                                     <span class="badge bg-danger">Out of Stock</span>
-                                {% elif medicine.stock <= medicine.reorder_level %}
+                                {% elif item.stock <= item.reorder_level %}
                                     <span class="badge bg-warning">Low Stock</span>
                                 {% else %}
                                     <span class="badge bg-success">In Stock</span>
                                 {% endif %}
                             </td>
                             <td>
-                                <a href="{% url 'pharmacy:medicine_detail' medicine.pk %}" 
+                                <a href="{% url 'pharmacy:medicine_detail' item.id %}" 
                                    class="btn btn-sm btn-info">
                                     <i class="fas fa-eye"></i>
                                 </a>
-                                <a href="{% url 'pharmacy:update_stock' medicine.barcode_number %}" 
+                                <a href="{% url 'pharmacy:update_stock' item.barcode %}" 
                                    class="btn btn-sm btn-primary">
                                     <i class="fas fa-plus"></i>
                                 </a>
@@ -184,7 +196,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="7" class="text-center">No medicines found</td>
+                            <td colspan="9" class="text-center">No medicines found</td>
                         </tr>
                         {% endfor %}
                     </tbody>

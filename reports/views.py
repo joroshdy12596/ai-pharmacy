@@ -1,6 +1,9 @@
 from django.shortcuts import render
 from django.utils import timezone
 from decimal import Decimal
+from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
+import csv
 from pharmacy.models import SaleItem, PurchaseItem, Medicine
 
 
@@ -71,10 +74,15 @@ def reports_dashboard(request):
 			box_qty = int(m.calculate_available_stock() or 0)
 		except Exception:
 			box_qty = int(m.stock or 0)
+		# Compute extra strips beyond full boxes to avoid double-counting
 		try:
-			strip_qty = int(m.strips_in_stock or 0)
+			total_strips = int(m.strips_in_stock or 0)
 		except Exception:
-			strip_qty = box_qty * (m.strips_per_box or 1) if box_qty else 0
+			total_strips = box_qty * (m.strips_per_box or 1) if box_qty else 0
+		strips_per_box = m.strips_per_box or 1
+		strip_qty = total_strips - (box_qty * strips_per_box)
+		if strip_qty < 0:
+			strip_qty = 0
 
 		box_price = Decimal(m.price or 0)
 		box_purchase = Decimal(m.purchase_price or 0)
@@ -116,3 +124,127 @@ def reports_dashboard(request):
 	}
 
 	return render(request, 'reports/dashboard.html', context)
+
+@login_required
+def inventory_cost(request):
+    """Standalone page: Total purchase cost of current products"""
+    meds = Medicine.objects.filter(is_active=True).order_by('name')
+    total_purchase_cost = Decimal('0')
+    rows = []
+
+    for m in meds:
+        try:
+            box_qty = int(m.calculate_available_stock() or 0)
+        except Exception:
+            box_qty = int(m.stock or 0)
+        # Compute strips not already counted as full boxes
+        try:
+            total_strips = int(m.strips_in_stock or 0)
+        except Exception:
+            total_strips = box_qty * (m.strips_per_box or 1) if box_qty else 0
+        strips_per_box = m.strips_per_box or 1
+        strip_qty = total_strips - (box_qty * strips_per_box)
+        if strip_qty < 0:
+            strip_qty = 0
+
+        unit_purchase = Decimal(str(m.purchase_price or 0))
+        strips_per_box = m.strips_per_box or 1
+        strip_purchase = (unit_purchase / Decimal(strips_per_box)) if strips_per_box else Decimal('0')
+
+        total_purchase = (unit_purchase * Decimal(box_qty)) + (strip_purchase * Decimal(strip_qty))
+        total_purchase_cost += total_purchase
+
+        rows.append({
+            'id': m.id,
+            'name': m.name,
+            'box_qty': box_qty,
+            'strip_qty': strip_qty,
+            'unit_purchase': f"{unit_purchase:.2f}",
+            'total_purchase': f"{total_purchase:.2f}",
+        })
+
+    context = {
+        'rows': rows,
+        'total_purchase_cost': f"{total_purchase_cost:.2f}",
+    }
+    return render(request, 'reports/inventory_cost.html', context)
+
+
+@login_required
+def inventory_cost_export(request):
+    """CSV export for inventory purchase costs"""
+    medicines = Medicine.objects.filter(is_active=True).order_by('name')
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="inventory_purchase_cost_{timezone.now().date().strftime("%Y%m%d")}.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['Medicine', 'Box Qty', 'Strip Qty', 'Unit Purchase', 'Total Purchase'])
+
+    for m in medicines:
+        try:
+            box_qty = int(m.calculate_available_stock() or 0)
+        except Exception:
+            box_qty = int(m.stock or 0)
+        # Compute strips not already counted as full boxes
+        try:
+            total_strips = int(m.strips_in_stock or 0)
+        except Exception:
+            total_strips = box_qty * (m.strips_per_box or 1) if box_qty else 0
+        strips_per_box = m.strips_per_box or 1
+        strip_qty = total_strips - (box_qty * strips_per_box)
+        if strip_qty < 0:
+            strip_qty = 0
+
+        unit_purchase = Decimal(str(m.purchase_price or 0))
+        strips_per_box = m.strips_per_box or 1
+        strip_purchase = (unit_purchase / Decimal(strips_per_box)) if strips_per_box else Decimal('0')
+
+        total_purchase = (unit_purchase * Decimal(box_qty)) + (strip_purchase * Decimal(strip_qty))
+        writer.writerow([m.name, box_qty, strip_qty, f"{unit_purchase:.2f}", f"{total_purchase:.2f}"])
+
+    return response
+
+
+@login_required
+def inventory_summary(request):
+    """Compact overview showing total selling value, total purchase cost, and expected profit."""
+    meds = Medicine.objects.filter(is_active=True).order_by('name')
+    total_selling = Decimal('0')
+    total_purchase = Decimal('0')
+
+    for m in meds:
+        try:
+            box_qty = int(m.calculate_available_stock() or 0)
+        except Exception:
+            box_qty = int(m.stock or 0)
+        # Compute strips not already counted as full boxes
+        try:
+            total_strips = int(m.strips_in_stock or 0)
+        except Exception:
+            total_strips = box_qty * (m.strips_per_box or 1) if box_qty else 0
+        strips_per_box = m.strips_per_box or 1
+        strip_qty = total_strips - (box_qty * strips_per_box)
+        if strip_qty < 0:
+            strip_qty = 0
+
+        unit_price = Decimal(str(m.price or 0))
+        unit_purchase = Decimal(str(m.purchase_price or 0))
+        strips_per_box = m.strips_per_box or 1
+
+        try:
+            strip_price = Decimal(m.get_strip_price() or unit_price)
+        except Exception:
+            strip_price = unit_price
+        strip_purchase = (unit_purchase / Decimal(strips_per_box)) if strips_per_box else Decimal('0')
+
+        total_selling += (unit_price * Decimal(box_qty)) + (strip_price * Decimal(strip_qty))
+        total_purchase += (unit_purchase * Decimal(box_qty)) + (strip_purchase * Decimal(strip_qty))
+
+    total_profit = total_selling - total_purchase
+
+    context = {
+        'total_selling': f"{total_selling:.2f}",
+        'total_purchase': f"{total_purchase:.2f}",
+        'total_profit': f"{total_profit:.2f}",
+    }
+    return render(request, 'reports/inventory_summary.html', context)

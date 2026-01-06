@@ -1,0 +1,55 @@
+{% extends 'pharmacy/base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-3">
+        <div class="col-md-8">
+            <h2>Inventory Purchase Cost</h2>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="{% url 'reports:inventory_cost_export' %}" class="btn btn-success">
+                <i class="fas fa-file-excel"></i> Export CSV
+            </a>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5>Total Purchase Cost: <strong>${{ total_purchase_cost }}</strong></h5>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Medicine</th>
+                            <th>Box Qty</th>
+                            <th>Strip Qty</th>
+                            <th>Unit Purchase</th>
+                            <th>Total Purchase</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in rows %}
+                        <tr>
+                            <td>{{ r.name }}</td>
+                            <td>{{ r.box_qty }}</td>
+                            <td>{{ r.strip_qty }}</td>
+                            <td>${{ r.unit_purchase }}</td>
+                            <td>${{ r.total_purchase }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center">No data</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
