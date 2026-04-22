@@ -1,0 +1,124 @@
+{% extends 'pharmacy/base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Price Comparison Report</h2>
+    <p class="text-muted">Compare selling prices vs purchase prices to identify unusual pricing</p>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Total Products</h5>
+                    <h3 class="text-primary">{{ total_products }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Products with Issues</h5>
+                    <h3 class="text-danger">{{ products_with_issues }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Issue Percentage</h5>
+                    <h3 class="text-warning">{{ issue_percentage|floatformat:1 }}%</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Products with Issues -->
+    {% if price_issues %}
+    <div class="card mb-4">
+        <div class="card-header bg-danger text-white">
+            <h5 class="mb-0">⚠️ Products with Pricing Issues</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Medicine Name</th>
+                            <th>Barcode</th>
+                            <th>Selling Price</th>
+                            <th>Purchase Price</th>
+                            <th>Profit</th>
+                            <th>Profit Margin</th>
+                            <th>Issues</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in price_issues %}
+                        <tr>
+                            <td>{{ item.medicine.name }}</td>
+                            <td>{{ item.medicine.barcode_number }}</td>
+                            <td>${{ item.selling_price|floatformat:2 }}</td>
+                            <td>${{ item.purchase_price|floatformat:2 }}</td>
+                            <td class="{% if item.profit < 0 %}text-danger{% else %}text-success{% endif %}">
+                                ${{ item.profit|floatformat:2 }}
+                            </td>
+                            <td class="{% if item.profit_margin < 0 %}text-danger{% elif item.profit_margin > 100 %}text-warning{% else %}text-success{% endif %}">
+                                {{ item.profit_margin|floatformat:1 }}%
+                            </td>
+                            <td>
+                                {% for issue in item.issues %}
+                                <span class="badge bg-danger">{{ issue }}</span>
+                                {% endfor %}
+                            </td>
+                            <td>
+                                <a href="{% url 'pharmacy:medicine_edit' item.medicine.pk %}" class="btn btn-sm btn-primary">
+                                    <i class="fas fa-edit"></i> Edit
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Normal Products -->
+    <div class="card">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0">✅ Normal Products ({{ normal_products|length }})</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Medicine Name</th>
+                            <th>Barcode</th>
+                            <th>Selling Price</th>
+                            <th>Purchase Price</th>
+                            <th>Profit</th>
+                            <th>Profit Margin</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in normal_products %}
+                        <tr>
+                            <td>{{ item.medicine.name }}</td>
+                            <td>{{ item.medicine.barcode_number }}</td>
+                            <td>${{ item.selling_price|floatformat:2 }}</td>
+                            <td>${{ item.purchase_price|floatformat:2 }}</td>
+                            <td class="text-success">${{ item.profit|floatformat:2 }}</td>
+                            <td class="text-success">{{ item.profit_margin|floatformat:1 }}%</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

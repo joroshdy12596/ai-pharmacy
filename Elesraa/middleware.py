@@ -38,10 +38,15 @@ class ReportsBasicAuthMiddleware:
         self.challenged_cookie = getattr(settings, 'REPORTS_BASIC_AUTH_CHALLENGED_COOKIE', 'reports_auth_challenged')
 
     def __call__(self, request):
-        # Only protect URLs starting with /reports/
+        # Only protect URLs starting with /reports/ (or /pharmacy/reports/)
         path = request.path or ''
+
+        # Allow the expiry report to be publicly accessible without basic auth
+        if path.startswith('/pharmacy/reports/expiry') or path.startswith('/reports/expiry'):
+            return self.get_response(request)
+
         # protect /reports/ only when a password is configured
-        if path.startswith('/reports/') and self.password:
+        if (path.startswith('/reports/') or path.startswith('/pharmacy/reports/')) and self.password:
             # 1) If we have a signed timestamp cookie and it's not expired -> allow
             ts_val = request.COOKIES.get(self.ts_cookie)
             if ts_val:

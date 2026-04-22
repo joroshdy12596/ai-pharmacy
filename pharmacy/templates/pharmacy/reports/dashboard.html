@@ -64,6 +64,21 @@
                 </div>
             </div>
         </div>
+
+        <!-- Price Comparison Reports -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-balance-scale text-danger"></i> Price Comparison
+                    </h5>
+                    <p class="card-text">Compare selling vs purchase prices to identify pricing issues.</p>
+                    <a href="{% url 'pharmacy:price_comparison_report' %}" class="btn btn-danger">
+                        View Price Comparison
+                    </a>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %} 

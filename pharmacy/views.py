@@ -532,14 +532,42 @@ def pos_view(request):
         except Customer.DoesNotExist:
             request.session['selected_customer_id'] = None
             
+    # Expiry alert (default 90 days) - show only to staff to minimize noise
+    expiry_alert_days = getattr(settings, 'EXPIRY_ALERT_DAYS', 90)
+    expiring_count = 0
+    expiring_items = []  # top 3 soonest
+    if request.user.is_staff:
+        today = timezone.now().date()
+        soon = today + timezone.timedelta(days=expiry_alert_days)
+        # Count distinct medicines with non-zero stock that expire soon
+        expiring_count = StockEntry.objects.filter(
+            expiration_date__range=[today, soon],
+            quantity__gt=0
+        ).values_list('medicine', flat=True).distinct().count()
+        # Get up to top 3 soonest stock entries (select_related to avoid extra queries)
+        qs = StockEntry.objects.filter(
+            expiration_date__range=[today, soon],
+            quantity__gt=0
+        ).select_related('medicine').order_by('expiration_date')[:3]
+        for entry in qs:
+            days_left = (entry.expiration_date - today).days
+            expiring_items.append({
+                'name': entry.medicine.name,
+                'expiration_date': entry.expiration_date,
+                'days_left': days_left,
+            })
+
     context = {
         'cart': cart,
         'original_total': original_total,
         'cart_total': cart_total,
-        'selected_customer': customer
+        'selected_customer': customer,
+        'expiring_count': expiring_count,
+        'expiry_alert_days': expiry_alert_days,
+        'expiring_items': expiring_items,
     }
     
-    return render(request, 'pharmacy/pos.html', context)
+    return render(request, 'pharmacy/pos.html', context)    
 
 @login_required
 def pos_remove_item(request, item_id):
@@ -1068,7 +1096,6 @@ def inventory_report(request):
     
     return render(request, 'pharmacy/reports/inventory_report.html', context)
 
-@login_required
 def expiry_report(request):
     today = timezone.now().date()
     
@@ -1083,6 +1110,14 @@ def expiry_report(request):
             today + timezone.timedelta(days=60)
         ]
     ).select_related('medicine')
+
+    # New bucket: Expiring in 61-90 days
+    expiring_90 = StockEntry.objects.filter(
+        expiration_date__range=[
+            today + timezone.timedelta(days=61),
+            today + timezone.timedelta(days=90)
+        ]
+    ).select_related('medicine')
     
     expired = StockEntry.objects.filter(
         expiration_date__lt=today
@@ -1091,6 +1126,7 @@ def expiry_report(request):
     context = {
         'expiring_30': expiring_30,
         'expiring_60': expiring_60,
+        'expiring_90': expiring_90,
         'expired': expired,
     }
     return render(request, 'pharmacy/reports/expiry_report.html', context)
@@ -1237,6 +1273,79 @@ def export_inventory_report(request):
         ])
     
     return response
+
+@login_required
+def price_comparison_report(request):
+    """Generate price comparison report to identify unusual pricing"""
+    medicines = Medicine.objects.all()
+    
+    # Prepare data for comparison
+    price_issues = []
+    normal_products = []
+    
+    for medicine in medicines:
+        selling_price = Decimal(medicine.price or 0)
+        purchase_price = Decimal(medicine.purchase_price or 0)
+        
+        if selling_price == 0 or purchase_price == 0:
+            continue
+            
+        profit = selling_price - purchase_price
+        profit_margin = (profit / purchase_price) * 100 if purchase_price > 0 else 0
+        
+        # Check for issues
+        issues = []
+        if purchase_price >= selling_price:
+            issues.append('Purchase price >= Selling price')
+        if profit_margin < 0:
+            issues.append('Negative profit margin')
+        if profit_margin > 500:  # Very high margin, might be error
+            issues.append('Very high profit margin (>500%)')
+        if profit_margin < 5:  # Very low margin
+            issues.append('Very low profit margin (<5%)')
+        
+        data = {
+            'medicine': medicine,
+            'selling_price': selling_price,
+            'purchase_price': purchase_price,
+            'profit': profit,
+            'profit_margin': profit_margin,
+            'issues': issues,
+            'has_issues': len(issues) > 0
+        }
+        
+        if issues:
+            price_issues.append(data)
+        else:
+            normal_products.append(data)
+    
+    # Sort issues by severity (purchase >= selling first, then negative profit, etc.)
+    def sort_key(item):
+        if 'Purchase price >= Selling price' in item['issues']:
+            return 0
+        elif 'Negative profit margin' in item['issues']:
+            return 1
+        elif 'Very high profit margin' in item['issues']:
+            return 2
+        else:
+            return 3
+    
+    price_issues.sort(key=sort_key)
+    
+    # Statistics
+    total_products = len(price_issues) + len(normal_products)
+    products_with_issues = len(price_issues)
+    issue_percentage = (products_with_issues / total_products * 100) if total_products > 0 else 0
+    
+    context = {
+        'price_issues': price_issues,
+        'normal_products': normal_products,
+        'total_products': total_products,
+        'products_with_issues': products_with_issues,
+        'issue_percentage': issue_percentage,
+    }
+    
+    return render(request, 'pharmacy/reports/price_comparison.html', context)
 
 class CustomerListView(LoginRequiredMixin, ListView):
     model = Customer
@@ -1914,6 +2023,193 @@ def barcode_print(request):
         'debug_info': debug_info if settings.DEBUG else None
     }
     return render(request, 'pharmacy/barcode_print.html', context)
+
+def barcode_print_optimized(request):
+    """Optimized barcode printing with adjustable parameters for faster scanner readability"""
+    import tempfile
+    
+    barcode = request.GET.get('barcode')
+    medicine = None
+    success_message = None
+    error_message = None
+    barcode_type = request.GET.get('barcode_type', 'ean13')
+    module_height = request.GET.get('module_height', '24')
+    quiet_zone = request.GET.get('quiet_zone', '3')
+    
+    if barcode:
+        medicine = Medicine.objects.filter(barcode_number=barcode).first()
+        
+        if medicine and request.method == 'POST' and request.POST.get('print_optimized'):
+            try:
+                copies = min(int(request.POST.get('copies', 1)), 10)
+                barcode_type = request.POST.get('barcode_type', 'ean13')
+                module_height = float(request.POST.get('module_height', 24))
+                quiet_zone = int(request.POST.get('quiet_zone', 3))
+                printer_name = request.POST.get('printer', 'Xprinter')
+                
+                # Import required libraries
+                import win32print
+                import win32ui
+                from PIL import ImageWin
+                import barcode as pybarcode
+                from barcode.writer import ImageWriter
+                
+                # Label settings
+                LABEL_WIDTH_MM = 40
+                LABEL_HEIGHT_MM = 25
+                DPI = 203
+                MM_TO_INCH = 25.4
+                WIDTH_PX = int(LABEL_WIDTH_MM / MM_TO_INCH * DPI)
+                HEIGHT_PX = int(LABEL_HEIGHT_MM / MM_TO_INCH * DPI)
+                
+                # Data
+                PHARMACY_NAME = "صيدلية الإسراء"
+                PRODUCT_NAME = medicine.name
+                PRICE = f"{medicine.price} ج.م"
+                BARCODE_VALUE = str(medicine.barcode_number)
+                
+                # Font
+                FONT_PATHS = [
+                    "C:\\Windows\\Fonts\\arial.ttf",
+                    "C:\\Windows\\Fonts\\Tahoma.ttf",
+                    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                ]
+                FONT_SIZE = 26
+                font = None
+                for path in FONT_PATHS:
+                    try:
+                        font = ImageFont.truetype(path, FONT_SIZE)
+                        break
+                    except OSError:
+                        continue
+                if font is None:
+                    font = ImageFont.load_default()
+                
+                # Arabic shaping
+                PHARMACY_NAME_SHAPED = shape_arabic(PHARMACY_NAME)
+                PRODUCT_NAME_SHAPED = shape_arabic(PRODUCT_NAME[:20])
+                
+                # Create label image
+                image = Image.new("L", (WIDTH_PX, HEIGHT_PX), 255)
+                draw = ImageDraw.Draw(image)
+                
+                def get_text_size(draw, text, font):
+                    bbox = draw.textbbox((0, 0), text, font=font)
+                    width = bbox[2] - bbox[0]
+                    height = bbox[3] - bbox[1]
+                    return width, height
+                
+                # Pharmacy name
+                pharmacy_w, pharmacy_h = get_text_size(draw, PHARMACY_NAME_SHAPED, font)
+                draw.text(((WIDTH_PX - pharmacy_w) // 2, 3), PHARMACY_NAME_SHAPED, font=font, fill=0)
+                
+                # Product name (smaller font but still large for visibility)
+                small_font = font if FONT_SIZE > 14 else font
+                try:
+                    small_font = ImageFont.truetype(FONT_PATHS[0] if FONT_PATHS else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 20)
+                except:
+                    pass
+                product_w, product_h = get_text_size(draw, PRODUCT_NAME_SHAPED, small_font)
+                draw.text(((WIDTH_PX - product_w) // 2, 3 + pharmacy_h + 1), PRODUCT_NAME_SHAPED, font=small_font, fill=0)
+                
+                # Generate barcode based on type
+                barcode_value = BARCODE_VALUE
+                if barcode_type == 'ean13' and len(barcode_value) in (12, 13):
+                    barcode_obj = pybarcode.get('ean13', barcode_value, writer=ImageWriter())
+                else:
+                    barcode_obj = pybarcode.get('code128', barcode_value, writer=ImageWriter())
+                
+                # Save barcode with optimized settings (Windows-compatible path)
+                temp_dir = tempfile.gettempdir()
+                barcode_temp_path = os.path.join(temp_dir, f"barcode_opt_{medicine.id}")
+                barcode_obj.save(barcode_temp_path, options={
+                    "module_height": module_height,
+                    "font_size": 0,
+                    "text_distance": 0,
+                    "quiet_zone": quiet_zone,
+                    "write_text": False
+                })
+                
+                # Load, resize and optimize barcode
+                barcode_img_x = barcode_temp_path + ".png"
+                if not os.path.exists(barcode_img_x):
+                    raise FileNotFoundError(f"Barcode file not created: {barcode_img_x}")
+                
+                barcode_img = Image.open(barcode_img_x).convert("L")
+                
+                # Calculate barcode dimensions (make barcode bigger)
+                available_width = WIDTH_PX - 4
+                available_height = HEIGHT_PX - (3 + pharmacy_h + product_h + 12)
+                if available_height < 25:
+                    available_height = 25
+                
+                # Resize with NEAREST to keep sharp edges
+                barcode_resized = barcode_img.resize((available_width, available_height), resample=Image.NEAREST)
+                
+                # Convert to strict monochrome for thermal printer
+                barcode_mono = barcode_resized.point(lambda x: 0 if x < 128 else 255, '1').convert("L")
+                
+                # Calculate position
+                barcode_y = 3 + pharmacy_h + product_h + 2
+                image.paste(barcode_mono, (3, barcode_y))
+                
+                # Price (use larger font for better visibility)
+                price_font = font
+                try:
+                    price_font = ImageFont.truetype(FONT_PATHS[0] if FONT_PATHS else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24)
+                except:
+                    price_font = font
+                
+                price_w, price_h = get_text_size(draw, PRICE, price_font)
+                price_y = HEIGHT_PX - price_h - 2
+                draw.text(((WIDTH_PX - price_w) // 2, price_y), PRICE, font=price_font, fill=0)
+                
+                # Print to Windows printer
+                hDC = win32ui.CreateDC()
+                try:
+                    hDC.CreatePrinterDC(printer_name)
+                except:
+                    # Fallback to default printer
+                    hDC.CreatePrinterDC()
+                
+                # Printer dimensions
+                printer_size = (hDC.GetDeviceCaps(110), hDC.GetDeviceCaps(111))
+                
+                for _ in range(copies):
+                    hDC.StartDoc("Optimized Barcode Label")
+                    hDC.StartPage()
+                    dib = ImageWin.Dib(image)
+                    x = int((printer_size[0] - image.size[0]) / 2)
+                    y = int((printer_size[1] - image.size[1]) / 2)
+                    dib.draw(hDC.GetHandleOutput(), (x, y, x + image.size[0], y + image.size[1]))
+                    hDC.EndPage()
+                    hDC.EndDoc()
+                
+                hDC.DeleteDC()
+                
+                # Clean up
+                try:
+                    os.remove(barcode_img_x)
+                    os.remove(barcode_temp_path)
+                except:
+                    pass
+                
+                success_message = f"✅ تمت الطباعة بنجاح! ({copies} نسخة) - {barcode_type.upper()} | حجم: {module_height}mm"
+                messages.success(request, success_message)
+                logger.info(f"Optimized barcode printed: {barcode} ({barcode_type}, height={module_height}mm)")
+                
+            except Exception as e:
+                error_message = f"❌ خطأ في الطباعة: {str(e)}"
+                logger.error(f"Optimized barcode printing error: {str(e)}", exc_info=True)
+                messages.error(request, error_message)
+    
+    context = {
+        'medicine': medicine,
+        'success_message': success_message,
+        'error_message': error_message,
+        'barcode_type': barcode_type,
+    }
+    return render(request, 'pharmacy/barcode_print_optimized.html', context)
 
 @login_required
 def edit_stock_entry(request, entry_id):
