@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>فاتورة - Receipt #{{ completed_sale.id }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 76mm;
+            min-height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+            background: white;
+            color: #000;
+        }
+
+        @page {
+            size: 76mm auto;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-size: 14px;
+            line-height: 1.5;
+            padding: 0;
+            min-height: 297mm;
+        }
+
+        .receipt-container {
+            width: 76mm;
+            min-height: 297mm;
+            margin: 0 auto;
+            background: white;
+            padding: 10px 6px 4px 6px;
+            font-family: 'Arial', sans-serif;
+        }
+
+        .receipt-header {
+            text-align: center;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #000;
+            margin-bottom: 10px;
+        }
+
+        .pharmacy-name {
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 4px;
+            color: #000;
+        }
+
+        .receipt-number,
+        .receipt-date {
+            font-size: 13px;
+            color: #333;
+            margin: 3px 0;
+        }
+
+        .customer-info {
+            font-size: 12px;
+            margin: 10px 0;
+            padding: 8px;
+            background: #f7f7f7;
+            border-radius: 3px;
+            text-align: center;
+            line-height: 1.4;
+        }
+
+        .items-section {
+            margin: 10px 0;
+            padding: 0;
+        }
+
+        .items-header,
+        .item,
+        .subtotal-row,
+        .discount-row,
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+
+        .items-header {
+            font-weight: bold;
+            font-size: 13px;
+            border-top: 2px solid #000;
+            border-bottom: 2px solid #000;
+            padding: 6px 0;
+            margin-bottom: 6px;
+        }
+
+        .item {
+            font-size: 13px;
+            padding: 6px 0;
+            border-bottom: 1px dashed #ccc;
+        }
+
+        .item:last-child {
+            border-bottom: none;
+        }
+
+        .item-name {
+            flex: 1;
+            text-align: right;
+            padding-right: 6px;
+            font-size: 13px;
+            white-space: normal;
+            word-break: break-word;
+        }
+
+        .item-qty,
+        .item-price {
+            width: 50px;
+            text-align: center;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+
+        .item-price {
+            width: 60px;
+            text-align: left;
+        }
+
+        .items-footer {
+            padding: 8px 0;
+            margin-top: 10px;
+            border-top: 2px solid #000;
+        }
+
+        .subtotal-row,
+        .discount-row,
+        .total-row {
+            font-size: 13px;
+            padding: 4px 0;
+        }
+
+        .discount-row {
+            color: #d9534f;
+        }
+
+        .total-row {
+            font-size: 16px;
+            font-weight: bold;
+            border-top: 1px solid #000;
+            padding-top: 8px;
+            margin-top: 4px;
+        }
+
+        .footer-section {
+            padding: 12px 0;
+            font-size: 13px;
+            border-top: 2px dashed #000;
+            margin-top: 12px;
+            text-align: center;
+            line-height: 1.4;
+        }
+
+        .thank-you {
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .points-info {
+            color: #5cb85c;
+            margin: 6px 0;
+            font-size: 13px;
+        }
+
+        .no-print {
+            display: none !important;
+        }
+
+        @media print {
+            html, body {
+                width: 76mm;
+                margin: 0;
+                padding: 0;
+                background: white;
+            }
+
+            @page {
+                size: 76mm auto;
+                margin: 0;
+                padding: 0;
+            }
+
+            body {
+                margin: 0;
+                padding: 0;
+            }
+
+            .receipt-container {
+                width: 80mm;
+                padding: 4px;
+                margin: 0;
+            }
+
+            .print-button,
+            .close-button,
+            .print-footer {
+                display: none !important;
+            }
+        }
+
+        .print-footer {
+            text-align: center;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+
+        .print-button,
+        .close-button {
+            width: calc(50% - 8px);
+            display: inline-block;
+            padding: 10px 0;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            margin: 4px 4px;
+        }
+
+        .print-button {
+            background: #5cb85c;
+            color: #fff;
+        }
+
+        .print-button:hover {
+            background: #4cae4c;
+        }
+
+        .close-button {
+            background: #d9534f;
+            color: #fff;
+        }
+
+        .close-button:hover {
+            background: #c9302c;
+        }
+    </style>
+</head>
+<body>
+    <div class="receipt-container">
+        <!-- Header -->
+        <div class="receipt-header">
+            <div class="pharmacy-name">صيدلية الإسراء</div>
+            <div class="pharmacy-name">ELESRAA PHARMACY</div>
+            <div class="receipt-number">فاتورة رقم / Invoice #{{ completed_sale.id }}</div>
+            <div class="receipt-date">{{ completed_sale.created_at }}</div>
+        </div>
+
+        <!-- Customer Info -->
+        {% if completed_sale.customer %}
+        <div class="customer-info">
+            <strong>العميل / Customer:</strong><br>
+            {{ completed_sale.customer }}
+        </div>
+        {% endif %}
+
+        <!-- Items Section -->
+        <div class="items-section">
+            <div class="items-header">
+                <span style="flex: 1; text-align: right;">الصنف / Item</span>
+                <span class="item-qty">الكمية</span>
+                <span class="item-price">السعر</span>
+            </div>
+
+            {% for item in completed_sale.items %}
+            <div class="item">
+                <div class="item-name">
+                    {{ item.name }}<br>
+                    <span style="font-size: 9px; color: #666;">{{ item.quantity }} × {{ item.unit_type }}</span>
+                </div>
+                <div class="item-qty">{{ item.quantity }}</div>
+                <div class="item-price">EGP {{ item.total|floatformat:2 }}</div>
+            </div>
+            {% endfor %}
+
+            <div class="items-footer">
+                {% if completed_sale.discounts_applied %}
+                <div class="subtotal-row">
+                    <span>الإجمالي / Subtotal:</span>
+                    <span>EGP {{ completed_sale.original_total|floatformat:2 }}</span>
+                </div>
+                <div class="discount-row">
+                    <span>خصم / Discount ({{ completed_sale.discount_percentage|floatformat:0 }}%):</span>
+                    <span>-EGP {{ completed_sale.discount_amount|floatformat:2 }}</span>
+                </div>
+                {% endif %}
+
+                <div class="total-row">
+                    <span>الإجمالي / TOTAL:</span>
+                    <span>EGP {{ completed_sale.total|floatformat:2 }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer-section">
+            <div class="thank-you">شكراً / Thank You!</div>
+            {% if completed_sale.customer %}
+            <div class="points-info">
+                ✓ تمت إضافة {{ completed_sale.points_added|default:"0" }} نقطة<br>
+                ✓ Added {{ completed_sale.points_added|default:"0" }} Points
+            </div>
+            {% endif %}
+            <div style="margin-top: 8px; font-size: 9px; color: #999;">
+                نتمنى لك يوم سعيد<br>
+                Have a great day!
+            </div>
+        </div>
+    </div>
+
+    <!-- Print Controls -->
+    <div class="print-footer no-print">
+        <button class="print-button" onclick="printInvoice()">
+            <i class="fas fa-print"></i> اطبع / Print
+        </button>
+        <button class="close-button" onclick="closeAndReturn()">
+            <i class="fas fa-times"></i> إغلق / Close
+        </button>
+    </div>
+
+    <script>
+        // Auto-print on page load
+        window.addEventListener('load', function() {
+            // Wait a moment for page to fully render
+            setTimeout(function() {
+                printInvoice();
+            }, 500);
+        });
+
+        function printInvoice() {
+            // Store reference to the receipt container
+            const receipt = document.querySelector('.receipt-container');
+            const printWindow = window.open('', 'RECEIPT_PRINT', 'height=900,width=360');
+            
+            // Write content to print window
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html lang="ar" dir="rtl">
+                <head>
+                    <meta charset="UTF-8">
+                    <style>
+                        * {
+                            margin: 0;
+                            padding: 0;
+                            box-sizing: border-box;
+                        }
+                        @page {
+                            size: 76mm 297mm;
+                            margin: 0;
+                        }
+                        html, body {
+                            width: 76mm;
+                            min-height: 297mm;
+                            margin: 0;
+                            padding: 0;
+                            background: white;
+                        }
+                        body {
+                            font-family: 'Arial', sans-serif;
+                            background: white;
+                            padding: 0;
+                            margin: 0;
+                        }
+                        .receipt {
+                            width: 80mm;
+                            min-height: 280mm;
+                            margin: 0;
+                            padding: 0;
+                            font-size: 14px;
+                            text-align: center;
+                        }
+                    </style>
+                </head>
+                <body>
+            `);            
+            // Add the receipt content
+            printWindow.document.write(receipt.innerHTML);
+            
+            printWindow.document.write(`
+                </body>
+                </html>
+            `);
+            
+            printWindow.document.close();
+            
+            // Print after a brief delay
+            setTimeout(function() {
+                printWindow.print();
+                // Close the print window after printing dialog
+                printWindow.onafterprint = function() {
+                    printWindow.close();
+                };
+            }, 250);
+        }
+
+        function closeAndReturn() {
+            // Return to POS page
+            window.location.href = "{% url 'pharmacy:pos' %}";
+        }
+
+        // Fallback keyboard shortcut
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'p') {
+                e.preventDefault();
+                printInvoice();
+            }
+        });
+    </script>
+</body>
+</html>

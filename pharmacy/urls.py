@@ -57,6 +57,7 @@ urlpatterns = [
     path('profile/change-password/', views.change_password, name='change_password'),
     path('barcode/print/optimized/', views.barcode_print_optimized, name='barcode_print_optimized'),
     path('barcode/print/', views.barcode_print, name='barcode_print'),
+    path('invoice/print/', views.invoice_print, name='invoice_print'),
     path('analytics/profit/', views.ProfitAnalyticsView.as_view(), name='profit_analytics'),
     path('products/search/', views.product_search, name='product_search'),
     path('stock/entry/<int:entry_id>/edit/', views.edit_stock_entry, name='edit_stock_entry'),

@@ -681,6 +681,7 @@ def pos_complete_sale(request):
             completed_items.append(sale_item)
 
         # Add loyalty points if customer exists
+        points_added = 0
         if customer:
             points_added = customer.add_points(total_amount)
             messages.success(
@@ -714,16 +715,21 @@ def pos_complete_sale(request):
             'customer_type': customer.get_customer_type_display() if customer else None,
             'discount_info': (
                 f'Manual discount {discount_percentage}%' if discount_percentage > 0 else None
-            )
+            ),
+            'points_added': points_added,
+            'created_at': timezone.now().strftime('%Y-%m-%d %H:%M:%S')
         }
         
         messages.success(request, f'Sale completed successfully. Sale ID: {sale.id}')
         
     except ValidationError as e:
         messages.error(request, str(e))
+        return redirect('pharmacy:pos')
     except Exception as e:
         messages.error(request, f'Error completing sale: {str(e)}')
+        return redirect('pharmacy:pos')
     
+    # Return to POS page without calling invoice print
     return redirect('pharmacy:pos')
 
 @login_required
@@ -2210,6 +2216,29 @@ def barcode_print_optimized(request):
         'barcode_type': barcode_type,
     }
     return render(request, 'pharmacy/barcode_print_optimized.html', context)
+
+@login_required
+def invoice_print(request):
+    """View for printing invoices (receipts) - Auto-prints on load"""
+    try:
+        # Get completed sale data from session
+        completed_sale = request.session.get('completed_sale')
+        
+        if not completed_sale:
+            messages.error(request, 'No sale data available for printing')
+            return redirect('pharmacy:pos')
+        
+        # Prepare context
+        context = {
+            'completed_sale': completed_sale,
+        }
+        
+        return render(request, 'pharmacy/invoice_print.html', context)
+        
+    except Exception as e:
+        logger.error(f"Error in invoice_print view: {str(e)}", exc_info=True)
+        messages.error(request, f'Error preparing invoice: {str(e)}')
+        return redirect('pharmacy:pos')
 
 @login_required
 def edit_stock_entry(request, entry_id):
