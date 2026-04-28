@@ -36,6 +36,12 @@
     <!-- Sales Table -->
     <div class="card">
         <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5>Recent Sales</h5>
+                <small class="text-muted">
+                    Page <strong>{% if page_obj %}{{ page_obj.number }}{% else %}1{% endif %}</strong> of <strong>{% if page_obj %}{{ page_obj.paginator.num_pages }}{% else %}1{% endif %}</strong>
+                </small>
+            </div>
             <div class="table-responsive">
                 <table class="table">
                     <thead>
@@ -53,7 +59,7 @@
                         <tr>
                             <td>#{{ sale.id }}</td>
                             <td>{{ sale.created_at|date:"F d, Y H:i" }}</td>
-                            <td>{{ sale.items.count }} items</td>
+                            <td>{{ sale.item_count }} items</td>
                             <td>${{ sale.total_amount }}</td>
                             <td>
                                 <span class="badge {% if sale.payment_method == 'CASH' %}bg-success{% else %}bg-primary{% endif %}">
@@ -74,6 +80,51 @@
                     </tbody>
                 </table>
             </div>
+            
+            <!-- Pagination Controls -->
+            {% if page_obj.has_other_pages %}
+            <nav aria-label="Page navigation" class="mt-3">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page=1">
+                            <i class="fas fa-chevron-left"></i> First
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}">
+                            Previous
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ num }}</span>
+                        </li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}">
+                            Next
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">
+                            Last <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
         </div>
     </div>
 </div>

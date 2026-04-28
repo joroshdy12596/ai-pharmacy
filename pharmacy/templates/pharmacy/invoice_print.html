@@ -303,6 +303,14 @@
                     <span>الإجمالي / TOTAL:</span>
                     <span>EGP {{ completed_sale.total|floatformat:2 }}</span>
                 </div>
+                <div class="total-row">
+                    <span>المدفوع / Cash Given:</span>
+                    <span>EGP {{ completed_sale.cash_given|floatformat:2 }}</span>
+                </div>
+                <div class="total-row">
+                    <span>الباقي / Change Returned:</span>
+                    <span>EGP {{ completed_sale.change_return|floatformat:2 }}</span>
+                </div>
             </div>
         </div>
 

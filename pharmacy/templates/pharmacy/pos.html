@@ -4,45 +4,188 @@
 <!-- Main content -->
 <div class="container-fluid mt-4">
     {% if expiring_count and expiring_count > 0 %}
-    <div class="alert alert-warning alert-dismissible fade show shadow-sm expiry-alert" role="alert">
-        <div class="d-flex align-items-start">
-            <div class="me-3 d-none d-md-block" style="font-size:28px; line-height:1">
-                <i class="fas fa-exclamation-triangle text-warning"></i>
+    <div class="alert alert-dismissible fade show expiry-alert-enhanced" role="alert">
+        <div class="d-flex align-items-start gap-3">
+            <div class="expiry-alert-icon">
+                <i class="fas fa-clock"></i>
             </div>
             <div class="flex-fill">
-                <div class="d-flex justify-content-between align-items-center">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
                     <div>
-                        <strong class="me-2">⚠️ {{ expiring_count }} product{{ expiring_count|pluralize }} expiring within {{ expiry_alert_days }} days</strong>
-                        <div class="small text-muted">Please review and act promptly.</div>
+                        <h5 class="mb-1">
+                            <i class="fas fa-hourglass-end"></i> Expiration Alert
+                        </h5>
+                        <p class="mb-0 expiry-alert-subtitle">
+                            {{ expiring_count }} product{{ expiring_count|pluralize }} expiring within {{ expiry_alert_days }} days
+                        </p>
                     </div>
-                    <div>
-                        <a href="{% url 'pharmacy:expiry_report' %}" class="btn btn-sm btn-outline-dark">View all</a>
-                    </div>
+                    <a href="{% url 'pharmacy:expiry_report' %}" class="btn btn-sm btn-warning-gradient">
+                        <i class="fas fa-eye"></i> View all
+                    </a>
                 </div>
 
                 {% if expiring_items %}
-                <ul class="list-group list-group-flush mt-2">
+                <div class="expiry-items-container mt-3">
                     {% for item in expiring_items %}
-                    <li class="list-group-item py-1 d-flex justify-content-between align-items-center">
-                        <div class="text-truncate" style="max-width:70%">{{ item.name }}</div>
-                        <div class="text-end">
-                            <span class="badge rounded-pill bg-danger">{{ item.days_left }}d</span>
-                            <div class="small text-muted">{{ item.expiration_date|date:"Y-m-d" }}</div>
+                    <div class="expiry-item-card">
+                        <div class="expiry-item-name">{{ item.name }}</div>
+                        <div class="expiry-item-meta">
+                            <span class="expiry-item-days">{{ item.days_left }}d</span>
+                            <span class="expiry-item-date">{{ item.expiration_date|date:"M d, Y" }}</span>
                         </div>
-                    </li>
+                    </div>
                     {% endfor %}
-                </ul>
+                </div>
                 {% endif %}
 
             </div>
-            <button type="button" class="btn-close ms-3" data-bs-dismiss="alert" aria-label="Close"></button>
+            <button type="button" class="btn-close btn-close-custom" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     </div>
     <style>
-    /* Small visual enhancement for expiry alert */
-    .expiry-alert { border-left: 4px solid #ffc107; }
-    .expiry-alert .badge { font-weight: 600; }
+    .expiry-alert-enhanced {
+        background: linear-gradient(135deg, #fff8e1 0%, #fffde7 100%);
+        border: 2px solid #ffc107;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 15px rgba(255, 193, 7, 0.2);
+        margin-bottom: 2rem;
+        border-left: 6px solid #ff9800;
+    }
+
+    .expiry-alert-enhanced h5 {
+        color: #ff6f00;
+        font-weight: 700;
+        font-size: 1.1rem;
+        margin: 0;
+    }
+
+    .expiry-alert-subtitle {
+        color: #f57f17;
+        font-size: 0.95rem;
+        font-weight: 500;
+    }
+
+    .expiry-alert-icon {
+        font-size: 2rem;
+        color: #ff6f00;
+        line-height: 1;
+        flex-shrink: 0;
+    }
+
+    .btn-warning-gradient {
+        background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);
+        border: none;
+        color: white;
+        font-weight: 600;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        transition: all 0.3s ease;
+    }
+
+    .btn-warning-gradient:hover {
+        background: linear-gradient(135deg, #ff9800 0%, #f57f17 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(255, 111, 0, 0.3);
+        color: white;
+    }
+
+    .expiry-items-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+    }
+
+    .expiry-item-card {
+        background: white;
+        border-left: 4px solid #ff6f00;
+        padding: 1rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .expiry-item-name {
+        font-weight: 600;
+        color: #333;
+        font-size: 0.95rem;
+        flex: 1;
+    }
+
+    .expiry-item-meta {
+        display: flex;
+        gap: 0.8rem;
+        align-items: center;
+        margin-left: 1rem;
+    }
+
+    .expiry-item-days {
+        background: linear-gradient(135deg, #ff6f00, #ff9800);
+        color: white;
+        padding: 0.4rem 0.8rem;
+        border-radius: 6px;
+        font-weight: 700;
+        font-size: 0.85rem;
+        white-space: nowrap;
+    }
+
+    .expiry-item-date {
+        color: #666;
+        font-size: 0.85rem;
+    }
+
+    .btn-close-custom {
+        opacity: 0.6;
+        transition: all 0.2s ease;
+    }
+
+    .btn-close-custom:hover {
+        opacity: 1;
+        transform: rotate(90deg);
+    }
+
+    @media (max-width: 768px) {
+        .expiry-items-container {
+            grid-template-columns: 1fr;
+        }
+        
+        .expiry-alert-enhanced {
+            padding: 1rem;
+        }
+    }
+
+    .expiry-alert-fade-out {
+        animation: fadeOutAlert 0.5s ease-out forwards;
+    }
+
+    @keyframes fadeOutAlert {
+        from {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        to {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+    }
     </style>
+
+    <script>
+    // Auto-hide expiry alert after 8 seconds
+    document.addEventListener('DOMContentLoaded', function() {
+        const expiryAlert = document.querySelector('.expiry-alert-enhanced');
+        if (expiryAlert) {
+            setTimeout(function() {
+                expiryAlert.classList.add('expiry-alert-fade-out');
+                setTimeout(function() {
+                    expiryAlert.remove();
+                }, 500);
+            }, 8000);
+        }
+    });
+    </script>
     {% endif %}    
     <!-- Customer Selection Card (hidden on POS page) -->
     <!--
@@ -200,9 +343,11 @@
                         <input type="text" class="form-control" id="changeToReturn" value="0.00">
                     </div>
 
-                    <form method="post" action="{% url 'pharmacy:pos_complete_sale' %}">
+                    <form method="post" action="{% url 'pharmacy:pos_complete_sale' %}" id="posCompleteSaleForm">
                         {% csrf_token %}
                         <input type="hidden" name="customer_id" id="selected-customer-id" value="{{ selected_customer.id|default:'' }}">
+                        <input type="hidden" name="cash_given" id="cashGivenHidden" value="">
+                        <input type="hidden" name="change_return" id="changeReturnHidden" value="">
 
             <div class="form-group mb-3">
                 <label for="discount_percentage">Discount Percentage</label>
@@ -294,43 +439,75 @@
                 <div id="receipt">
                     <h4 class="text-center">Elesraa Pharmacy</h4>
                     <p class="text-center" style="margin-bottom: 5mm;">Receipt #{{ completed_sale.id }}</p>
+                    <p class="text-center" style="font-size: 10px;">{{ completed_sale.created_at|date:"Y-m-d H:i" }}</p>
                     {% if completed_sale.customer %}
-                    <p class="text-center">Customer: {{ completed_sale.customer }}</p>
+                    <p class="text-center" style="font-size: 10px;">Customer: {{ completed_sale.customer }}</p>
                     {% endif %}
-                    <hr>
-                    <div class="receipt-items">
-                        {% for item in completed_items %}
-                        <div class="d-flex justify-content-between">
-                            <span style="width: 70%;">{{ item.name }} × {{ item.quantity }} {{ item.unit_type }}</span>
-                            <span style="width: 30%; text-align: left;">${{ item.total|floatformat:2 }}</span>
-                        </div>
-                        {% endfor %}
-                    </div>
-                    <hr>
+                    <hr style="margin: 3mm 0;">
+                    
+                    <!-- Receipt Items Table -->
+                    <table style="width: 100%; font-size: 10px; margin-bottom: 3mm;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid #000;">
+                                <th style="text-align: left; padding: 2mm 0;">Item</th>
+                                <th style="text-align: center; padding: 2mm 0;">Qty</th>
+                                <th style="text-align: center; padding: 2mm 0;">Price</th>
+                                <th style="text-align: right; padding: 2mm 0;">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in completed_items %}
+                            <tr style="border-bottom: 1px dotted #ccc;">
+                                <td style="text-align: left; padding: 2mm 0;">{{ item.name|truncatewords:4 }}</td>
+                                <td style="text-align: center; padding: 2mm 0;">{{ item.quantity }}{{ item.unit_type|first }}</td>
+                                <td style="text-align: center; padding: 2mm 0;">${{ item.price|floatformat:2 }}</td>
+                                <td style="text-align: right; padding: 2mm 0;">${{ item.total|floatformat:2 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    
+                    <hr style="margin: 3mm 0;">
+                    
                     {% if completed_sale.discounts_applied %}
-                    <div class="mb-2">
-                        <div class="d-flex justify-content-between">
+                    <div style="margin-bottom: 2mm; font-size: 10px;">
+                        <div style="display: flex; justify-content: space-between;">
                             <span>Original Total:</span>
                             <span>${{ completed_sale.original_total|floatformat:2 }}</span>
                         </div>
-                        <div class="d-flex justify-content-between">
+                        <div style="display: flex; justify-content: space-between;">
                             <span>Discount ({{ completed_sale.discount_percentage|floatformat:0 }}%):</span>
                             <span>-${{ completed_sale.discount_amount|floatformat:2 }}</span>
                         </div>
                     </div>
                     {% endif %}
-                    <div class="d-flex justify-content-between" style="font-weight: bold; margin-bottom: 5mm;">
+                    
+                    <div style="display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 3mm; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 2mm 0; font-size: 12px;">
                         <span>Final Total:</span>
                         <span>${{ completed_sale.total|floatformat:2 }}</span>
                     </div>
+                    
+                    <div style="display: flex; justify-content: space-between; font-size: 9px; margin-bottom: 2mm;">
+                        <span>Payment: {{ completed_sale.payment_method }}</span>
+                        <span>Cashier: {{ completed_sale.cashier }}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 2mm;">
+                        <span>Cash Given:</span>
+                        <span>${{ completed_sale.cash_given|floatformat:2 }}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 2mm;">
+                        <span>Change Returned:</span>
+                        <span>${{ completed_sale.change_return|floatformat:2 }}</span>
+                    </div>
+                    
                     {% if completed_sale.customer and completed_sale.points_added %}
-                    <div class="text-center" style="font-size: 11px; margin-bottom: 3mm;">
-                        <p>+ {{ completed_sale.points_added }} Loyalty Points</p>
+                    <div style="text-align: center; font-size: 10px; margin-bottom: 2mm;">
+                        <p style="margin: 0;">+ {{ completed_sale.points_added }} Loyalty Points</p>
                     </div>
                     {% endif %}
-                    <div class="text-center" style="font-size: 11px;">
-                        <p>Thank you!</p>
-                        <p>{{ completed_sale.created_at|date:"Y/m/d H:i" }}</p>
+                    
+                    <div style="text-align: center; font-size: 10px;">
+                        <p style="margin: 2mm 0;">Thank you for your purchase!</p>
                     </div>
                 </div>
             </div>
@@ -401,6 +578,24 @@ document.addEventListener('DOMContentLoaded', function() {
         const observer = new MutationObserver(updateChangeToReturn);
         observer.observe(totalAmountElem, { childList: true, characterData: true, subtree: true });
     }
+
+    var posCompleteSaleForm = document.getElementById('posCompleteSaleForm');
+    var cashGivenHidden = document.getElementById('cashGivenHidden');
+    var changeReturnHidden = document.getElementById('changeReturnHidden');
+    if (posCompleteSaleForm) {
+        posCompleteSaleForm.addEventListener('submit', function() {
+            var given = parseFloat(cashGivenInput.value);
+            var totalText = totalAmountElem ? totalAmountElem.textContent.replace(/[$\s]/g, '') : '0';
+            var total = parseFloat(totalText) || 0;
+            if (isNaN(given) || given <= 0) {
+                given = total;
+            }
+            var change = given - total;
+            cashGivenHidden.value = given.toFixed(2);
+            changeReturnHidden.value = change >= 0 ? change.toFixed(2) : '0.00';
+        });
+    }
+
     // Initial calculation
     updateChangeToReturn();
 });

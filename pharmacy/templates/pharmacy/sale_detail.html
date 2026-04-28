@@ -24,30 +24,27 @@
             <div>
                 <span>Date: {{ sale.created_at|date:"Y-m-d H:i" }}</span><br>
                 <span>Cashier: {{ sale.user.username }}</span><br>
-                <span>Payment: {{ sale.payment_method }}</span>
+                <span>Payment: {{ sale.payment_method }}</span><br>
+                <span>Cash Given: ${{ sale.cash_given|floatformat:2 }}</span><br>
+                <span>Change Returned: ${{ sale.change_return|floatformat:2 }}</span>
             </div>
             <hr style="margin: 6px 0;">
             <table style="width: 100%; border-collapse: collapse;">
                 <thead>
-                    <tr style="border-bottom: 1px dashed #000; font-size: 12px;">
-                        <th style="text-align:left;">Item</th>
-                        <th style="text-align:right;">Qty</th>
-                        <th style="text-align:right;">Price</th>
-                        <th style="text-align:right;">Sub</th>
+                    <tr style="border-bottom: 1px dashed #000; font-size: 11px;">
+                        <th style="text-align:left; padding: 3px 0;">Item</th>
+                        <th style="text-align:center; padding: 3px 0;">Qty</th>
+                        <th style="text-align:right; padding: 3px 0; width: 30%;">Price</th>
+                        <th style="text-align:right; padding: 3px 0; width: 20%;">Total</th>
                     </tr>
                 </thead>
-                    <th style="text-align:right;">Exp</th>
-                    <th style="text-align:right;">Barcode</th>
                 <tbody>
                     {% for item in items %}
-                    <tr style="font-size: 12px;">
-                        <td style="text-align:left;">{{ item.medicine.name }}</td>
-                        <td style="text-align:right;">{{ item.quantity }}</td>
-                        <td style="text-align:right;">{{ item.get_unit_type_display }}</td>
-                        <td style="text-align:right;">{{ item.expiry_date|date:'Y-m-d' }}</td>
-                        <td style="text-align:right;">{{ item.medicine.barcode_number }}</td>
-                        <td style="text-align:right;">{{ item.price }}</td>
-                        <td style="text-align:right;">{{ item.subtotal }}</td>
+                    <tr style="font-size: 12px; border-bottom: 1px dotted #ccc;">
+                        <td style="text-align:left; padding: 3px 0;">{{ item.medicine.name|truncatewords:3 }}</td>
+                        <td style="text-align:center; padding: 3px 0;">{{ item.quantity }} {{ item.get_unit_type_display|first }}</td>
+                        <td style="text-align:right; padding: 3px 0;">${{ item.price|floatformat:2 }}</td>
+                        <td style="text-align:right; padding: 3px 0;">${{ item.subtotal|floatformat:2 }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

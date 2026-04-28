@@ -267,6 +267,32 @@ document.addEventListener('DOMContentLoaded', function() {
             alert('Please enter valid dates in M/YY format (e.g. 2/28) or use the date picker');
         }
     });
+
+    function getQueryParam(name) {
+        const params = new URLSearchParams(window.location.search);
+        return params.get(name);
+    }
+
+    function triggerAutoPrint() {
+        const autoPrint = getQueryParam('auto_print');
+        const copies = getQueryParam('copies');
+        if (autoPrint && copies && !isNaN(copies) && Number(copies) > 0) {
+            const barcode = "{{ medicine.barcode_number }}";
+            const printUrl = `{% url 'pharmacy:barcode_print' %}?barcode=${encodeURIComponent(barcode)}&thermal_print=1&copies=${encodeURIComponent(copies)}`;
+            fetch(printUrl, { method: 'GET', credentials: 'same-origin' })
+                .then(() => {
+                    const url = new URL(window.location);
+                    url.searchParams.delete('auto_print');
+                    url.searchParams.delete('copies');
+                    window.history.replaceState({}, '', url);
+                })
+                .catch((error) => {
+                    console.error('Auto print failed:', error);
+                });
+        }
+    }
+
+    triggerAutoPrint();
 });
 </script>
 {% endblock %}

@@ -445,7 +445,10 @@ def update_stock(request, barcode):
                 request, 
                 f'Added {total_added} units to {medicine.name} with different expiration dates. New total: {new_stock}'
             )
-            return redirect('pharmacy:medicine_list')
+            return redirect(
+                reverse('pharmacy:update_stock', kwargs={'barcode': barcode})
+                + f'?auto_print=1&copies={total_added}'
+            )
         else:
             messages.error(request, 'Please provide valid quantities and expiration dates for all entries')
     
@@ -611,11 +614,22 @@ def pos_complete_sale(request):
         discount_amount = subtotal * (discount_percentage / 100)
         total_amount = subtotal - discount_amount
 
+        cash_given = request.POST.get('cash_given')
+        try:
+            cash_given = float(cash_given) if cash_given not in [None, ''] else total_amount
+        except Exception:
+            cash_given = total_amount
+        change_return = cash_given - total_amount
+        if change_return < 0:
+            change_return = 0.0
+
         # Create sale record
         sale = Sale.objects.create(
             customer=customer,
             payment_method=payment_method,
             total_amount=total_amount,
+            cash_given=round(cash_given, 2),
+            change_return=round(change_return, 2),
             user=request.user,
             is_completed=True
         )
@@ -712,6 +726,8 @@ def pos_complete_sale(request):
             'discounts_applied': discount_percentage > 0,
             'discount_percentage': discount_percentage,
             'discount_amount': float(discount_amount),
+            'cash_given': float(cash_given),
+            'change_return': float(change_return),
             'customer_type': customer.get_customer_type_display() if customer else None,
             'discount_info': (
                 f'Manual discount {discount_percentage}%' if discount_percentage > 0 else None
@@ -733,20 +749,35 @@ def pos_complete_sale(request):
     return redirect('pharmacy:pos')
 
 @login_required
+@login_required
 def sales_history(request):
-    # Get completed sales
-    sales = Sale.objects.filter(
+    """Display sales history with pagination and optimized queries."""
+    from django.db.models import Sum, Count, Prefetch
+    from django.core.paginator import Paginator
+    
+    # Optimized query with prefetch and aggregate
+    sales_qs = Sale.objects.filter(
         is_completed=True
+    ).prefetch_related('items').annotate(
+        item_count=Count('items')
     ).order_by('-created_at')
     
-    # Calculate totals
-    total_sales = sales.count()
-    total_revenue = sum(sale.total_amount for sale in sales)
+    # Pagination: 20 items per page
+    paginator = Paginator(sales_qs, 20)
+    page_num = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_num)
+    
+    # Calculate totals using database aggregation (not Python loop)
+    totals = Sale.objects.filter(is_completed=True).aggregate(
+        total_count=Count('id'),
+        total_revenue=Sum('total_amount')
+    )
     
     context = {
-        'sales': sales,
-        'total_sales': total_sales,
-        'total_revenue': total_revenue,
+        'sales': page_obj.object_list,
+        'page_obj': page_obj,
+        'total_sales': totals['total_count'] or 0,
+        'total_revenue': totals['total_revenue'] or 0,
     }
     return render(request, 'pharmacy/sales_history.html', context)
 
@@ -1914,7 +1945,7 @@ def barcode_print(request):
         # Handle thermal printing
         if request.GET.get('thermal_print') and medicine:
             try:
-                copies = min(int(request.GET.get('copies', 1)), 5)  # Limit max copies to 5
+                copies = max(1, min(int(request.GET.get('copies', 1)), 999))  # Limit max copies to 999
                 printer_name = settings.PRINTER_SETTINGS['PRINTER_PATH']
                 debug_info.append(f"Printer name: {printer_name}")
                 logger.info(f"Attempting to print barcode {barcode} to {printer_name}")

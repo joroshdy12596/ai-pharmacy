@@ -63,6 +63,8 @@ class Sale(models.Model):
     customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    cash_given = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    change_return = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     payment_method = models.CharField(max_length=20, choices=[
         ('CASH', 'Cash'),
         ('CARD', 'Card'),
