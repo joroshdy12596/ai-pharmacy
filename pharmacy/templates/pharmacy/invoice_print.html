@@ -12,7 +12,7 @@
         }
 
         html, body {
-            width: 76mm;
+            width: 100%;
             min-height: 100%;
             margin: 0;
             padding: 0;
@@ -22,8 +22,8 @@
         }
 
         @page {
-            size: 76mm auto;
-            margin: 0;
+            size: A4;
+            margin: 10mm;
             padding: 0;
         }
 
@@ -31,12 +31,11 @@
             font-size: 14px;
             line-height: 1.5;
             padding: 0;
-            min-height: 297mm;
+            min-height: 100%;
         }
 
         .receipt-container {
-            width: 76mm;
-            min-height: 297mm;
+            width: 80mm;
             margin: 0 auto;
             background: white;
             padding: 10px 6px 4px 6px;
@@ -183,15 +182,15 @@
 
         @media print {
             html, body {
-                width: 76mm;
+                width: 100%;
                 margin: 0;
                 padding: 0;
                 background: white;
             }
 
             @page {
-                size: 76mm auto;
-                margin: 0;
+                size: A4;
+                margin: 10mm;
                 padding: 0;
             }
 
@@ -203,7 +202,7 @@
             .receipt-container {
                 width: 80mm;
                 padding: 4px;
-                margin: 0;
+                margin: 0 auto;
             }
 
             .print-button,
@@ -352,7 +351,7 @@
         function printInvoice() {
             // Store reference to the receipt container
             const receipt = document.querySelector('.receipt-container');
-            const printWindow = window.open('', 'RECEIPT_PRINT', 'height=900,width=360');
+            const printWindow = window.open('', 'RECEIPT_PRINT', 'height=900,width=900');
             
             // Write content to print window
             printWindow.document.write(`
@@ -367,12 +366,12 @@
                             box-sizing: border-box;
                         }
                         @page {
-                            size: 76mm 297mm;
-                            margin: 0;
+                            size: A4;
+                            margin: 10mm;
                         }
                         html, body {
-                            width: 76mm;
-                            min-height: 297mm;
+                            width: 100%;
+                            height: 100%;
                             margin: 0;
                             padding: 0;
                             background: white;
@@ -385,8 +384,7 @@
                         }
                         .receipt {
                             width: 80mm;
-                            min-height: 280mm;
-                            margin: 0;
+                            margin: 0 auto;
                             padding: 0;
                             font-size: 14px;
                             text-align: center;

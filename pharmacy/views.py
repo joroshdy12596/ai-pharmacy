@@ -2272,6 +2272,52 @@ def invoice_print(request):
         return redirect('pharmacy:pos')
 
 @login_required
+def invoice_print_old(request, sale_id):
+    """View for printing old invoices from sales history"""
+    try:
+        # Get the sale from database
+        sale = get_object_or_404(Sale, id=sale_id, is_completed=True)
+        
+        # Prepare completed sale data from database
+        completed_sale = {
+            'id': sale.id,
+            'customer': sale.customer.name if sale.customer else None,
+            'items': [
+                {
+                    'name': item.medicine.name,
+                    'quantity': item.quantity,
+                    'unit_type': item.get_unit_type_display(),
+                    'price': float(item.price),
+                    'total': float(item.subtotal)
+                }
+                for item in sale.items.all()
+            ],
+            'total': float(sale.total_amount),
+            'original_total': float(sale.total_amount),
+            'discounts_applied': False,
+            'discount_percentage': 0,
+            'discount_amount': 0,
+            'cash_given': float(sale.cash_given),
+            'change_return': float(sale.change_return),
+            'customer_type': sale.customer.get_customer_type_display() if sale.customer else None,
+            'discount_info': None,
+            'points_added': 0,
+            'created_at': sale.created_at.strftime('%Y-%m-%d %H:%M:%S')
+        }
+        
+        # Prepare context
+        context = {
+            'completed_sale': completed_sale,
+        }
+        
+        return render(request, 'pharmacy/invoice_print.html', context)
+        
+    except Exception as e:
+        logger.error(f"Error in invoice_print_old view: {str(e)}", exc_info=True)
+        messages.error(request, f'Error preparing invoice: {str(e)}')
+        return redirect('pharmacy:sales_history')
+
+@login_required
 def edit_stock_entry(request, entry_id):
     stock_entry = get_object_or_404(StockEntry, id=entry_id)
     medicine = stock_entry.medicine

@@ -10,8 +10,11 @@
             <a href="{% url 'pharmacy:sales_history' %}" class="btn btn-secondary">
                 <i class="fas fa-arrow-left"></i> Back to Sales
             </a>
+            <a href="{% url 'pharmacy:invoice_print_old' sale.id %}" class="btn btn-warning" target="_blank">
+                <i class="fas fa-file-pdf"></i> Print Invoice
+            </a>
             <button onclick="window.print()" class="btn btn-primary">
-                <i class="fas fa-print"></i> Print Receipt
+                <i class="fas fa-print"></i> Print Page
             </button>
         </div>
     </div>
