@@ -32,9 +32,10 @@ $trigger = New-ScheduledTaskTrigger `
     -TimeZone $TimeZone
 
 # Create action (run PowerShell script)
+$arg = "-NoProfile -ExecutionPolicy Bypass -File `"$ScriptPath`""
 $action = New-ScheduledTaskAction `
     -Execute "PowerShell.exe" `
-    -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$ScriptPath`""
+    -Argument $arg
 
 # Create task settings
 $settings = New-ScheduledTaskSettingsSet `
@@ -65,6 +66,7 @@ Write-Host "  2. Navigate to Task Scheduler Library" -ForegroundColor Gray
 Write-Host "  3. Search for: AI-Pharmacy Daily Git Commit" -ForegroundColor Gray
 Write-Host ""
 Write-Host "To run the task manually for testing:" -ForegroundColor Yellow
-Write-Host "  powershell -NoProfile -ExecutionPolicy Bypass -File `"$ScriptPath`"" -ForegroundColor Gray
+$msg = "  powershell -NoProfile -ExecutionPolicy Bypass -File $ScriptPath"
+Write-Host $msg -ForegroundColor Gray
 
 exit 0
