@@ -1964,6 +1964,17 @@ def barcode_print(request):
                 PRODUCT_NAME = medicine.name
                 PRICE = f"{medicine.price} م.ج"
                 BARCODE_VALUE = str(medicine.barcode_number)  # Ensure string
+                
+                # --- Get expiration date from latest stock entry ---
+                latest_stock = medicine.stock_entries.filter(
+                    expiration_date__gte=timezone.now().date()
+                ).order_by('-created_at').first()
+                
+                EXPIRATION_DATE_FORMATTED = 'MM/YY'
+                if latest_stock:
+                    exp_date = latest_stock.expiration_date
+                    EXPIRATION_DATE_FORMATTED = f"{exp_date.month:02d}/{exp_date.year % 100:02d}"
+                
                 # --- Font ---
                 FONT_PATHS = [
                     "C:\\Windows\\Fonts\\arial.ttf",
@@ -1997,6 +2008,46 @@ def barcode_print(request):
                 # Product name
                 product_w, product_h = get_text_size(draw, PRODUCT_NAME_SHAPED, font)
                 draw.text(((WIDTH_PX - product_w) // 2, 5 + pharmacy_h + 2), PRODUCT_NAME_SHAPED, font=font, fill=0)
+                
+                # Draw vertical expiration date on the right side
+                try:
+                    expiry_font_size = 20
+                    expiry_font = ImageFont.truetype(FONT_PATHS[0] if FONT_PATHS else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", expiry_font_size)
+                except:
+                    expiry_font = font
+                
+                # Create a larger temporary image with MUCH MORE space
+                temp_width = 200
+                temp_height = 100
+                expiry_temp_img = Image.new("L", (temp_width, temp_height), 255)
+                expiry_temp_draw = ImageDraw.Draw(expiry_temp_img)
+                
+                # Draw text in the center of the large canvas
+                expiry_temp_draw.text((50, 40), EXPIRATION_DATE_FORMATTED, font=expiry_font, fill=0)
+                
+                # Rotate 90 degrees counter-clockwise for vertical display
+                expiry_rotated = expiry_temp_img.rotate(90, expand=True)
+                
+                # Check if rotated image fits in label height, if not resize it
+                if expiry_rotated.size[0] > HEIGHT_PX:
+                    # Scale down to fit
+                    scale_factor = HEIGHT_PX / expiry_rotated.size[0]
+                    new_size = (int(expiry_rotated.size[0] * scale_factor), int(expiry_rotated.size[1] * scale_factor))
+                    expiry_rotated = expiry_rotated.resize(new_size, Image.LANCZOS)
+                
+                # Convert to binary (pure black and white) for sharp printing
+                expiry_binary = expiry_rotated.convert("1")
+                expiry_binary_l = expiry_binary.convert("L")
+                
+                # Paste on the right side of the label with proper positioning
+                right_margin = 2
+                expiry_x = WIDTH_PX - expiry_binary_l.size[0] - right_margin
+                
+                # Better vertical centering
+                expiry_y = max(2, (HEIGHT_PX - expiry_binary_l.size[1]) // 2)
+                
+                image.paste(expiry_binary_l, (expiry_x, expiry_y))
+                
                 # Price
                 price_w, price_h = get_text_size(draw, PRICE, font)
                 price_y = HEIGHT_PX - price_h - 15
@@ -2053,11 +2104,25 @@ def barcode_print(request):
                 error_message = f"Error printing label: {str(e)}"
                 logger.error(error_message, exc_info=True)
                 messages.error(request, error_message)
+    
+    # Get expiration date for preview (latest/newest entry)
+    latest_stock = None
+    expiry_formatted = 'MM/YY'
+    if medicine:
+        latest_stock = medicine.stock_entries.filter(
+            expiration_date__gte=timezone.now().date()
+        ).order_by('-created_at').first()
+        if latest_stock:
+            exp_date = latest_stock.expiration_date
+            expiry_formatted = f"{exp_date.month:02d}/{exp_date.year % 100:02d}"
+    
     context = {
         'medicine': medicine,
         'printed': printed,
         'error_message': error_message,
-        'debug_info': debug_info if settings.DEBUG else None
+        'debug_info': debug_info if settings.DEBUG else None,
+        'latest_stock': latest_stock,
+        'expiry_formatted': expiry_formatted
     }
     return render(request, 'pharmacy/barcode_print.html', context)
 

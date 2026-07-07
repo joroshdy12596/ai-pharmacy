@@ -59,16 +59,6 @@
                                     <input type="hidden" name="thermal_print" value="1">
                                     
                                     <div class="col-md-6">
-                                        <label class="form-label">الطابعة</label>
-                                        <select name="printer" class="form-select">
-                                            <option value="/dev/usb/lp0">الطابعة الرئيسية</option>
-                                            <option value="/dev/usb/lp1">طابعة 1</option>
-                                            <option value="/dev/usb/lp2">طابعة 2</option>
-                                            <option value="/dev/usb/lp3">طابعة 3</option>
-                                        </select>
-                                    </div>
-                                    
-                                    <div class="col-md-6">
                                         <label class="form-label">عدد النسخ</label>
                                         <input type="number" name="copies" class="form-control" 
                                                value="1" min="1" max="100">
@@ -96,8 +86,8 @@
                         <div class="col-md-6">
                             <div id="barcode-preview" class="d-flex justify-content-center align-items-center p-0 border rounded" 
                                  style="background: white; min-height: 30mm;">
-                                <div id="barcode-container" style="width: 40mm; height: 25mm; display: flex; flex-direction: column; justify-content: center; align-items: center; border: 1px dashed #ccc; margin: 0 auto; padding: 0;">
-                                    <div class="barcode-item" style="width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                                <div id="barcode-container" style="width: 40mm; height: 25mm; display: flex; flex-direction: column; justify-content: center; align-items: center; border: 1px dashed #ccc; margin: 0 auto; padding: 0; position: relative;">
+                                    <div class="barcode-item" style="width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative;">
                                         <div style="font-size: 9pt; margin-bottom: 2px; text-align: center;">صيدلية الإسراء</div>
                                         <div style="font-size: 10pt; margin-bottom: 2px; text-align: center; max-width: 36mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ medicine.name }}</div>
                                         {% if medicine.barcode_image %}
@@ -105,6 +95,12 @@
                                                  style="width: 90%; max-width: 34mm; display: block; margin: 2px auto 2px auto;">
                                         {% endif %}
                                         <div style="font-size: 11pt; margin-top: 2px; text-align: center;">{{ medicine.price }} ج.م</div>
+                                        <!-- تاريخ الصلاحية على اليمين بشكل عمودي -->
+                                        {% if latest_stock %}
+                                        <div id="expiry-display" style="position: absolute; right: 3px; top: 50%; transform: translateY(-50%); font-size: 13pt; font-weight: bold; writing-mode: vertical-rl; text-orientation: mixed;">
+                                            {{ expiry_formatted }}
+                                        </div>
+                                        {% endif %}
                                     </div>
                                 </div>
                             </div>
