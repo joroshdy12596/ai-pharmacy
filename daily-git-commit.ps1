@@ -38,7 +38,7 @@ if (-not $stagedFiles) {
     exit 0
 }
 
-$commitMessage = "Auto commit $timestamp"
+$commitMessage = "Auto commit - $timestamp"
 Write-Host "Running: git commit -m '$commitMessage'" -ForegroundColor Yellow
 git commit -m $commitMessage
 
