@@ -19,6 +19,15 @@ try {
 git config user.name "joroshdy12596" | Out-Null
 git config user.email "joroshdy12596@gmail.com" | Out-Null
 
+$branch = git branch --show-current 2>$null
+if ($LASTEXITCODE -eq 0 -and $branch) {
+    Write-Host "Running: git pull --rebase origin $branch" -ForegroundColor Yellow
+    git pull --rebase origin $branch
+} else {
+    Write-Host "Running: git pull --rebase origin HEAD" -ForegroundColor Yellow
+    git pull --rebase origin HEAD
+}
+
 Write-Host "Running: git add -A" -ForegroundColor Yellow
 git add -A
 
@@ -44,15 +53,7 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($remoteUrl)) {
 }
 
 Write-Host "Running: git push origin HEAD" -ForegroundColor Yellow
-
-if ($remoteUrl -match '^git@github\.com:') {
-    git push origin HEAD
-} elseif ($env:GITHUB_TOKEN) {
-    $tokenRemote = "https://oauth2:$($env:GITHUB_TOKEN)@github.com/joroshdy12596/ai-pharmacy.git"
-    git push $tokenRemote HEAD
-} else {
-    git push origin HEAD
-}
+git push origin HEAD
 
 Write-Host "[$(Get-Date)] Git auto-push completed successfully." -ForegroundColor Green
 exit 0

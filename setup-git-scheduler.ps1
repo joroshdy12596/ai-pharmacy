@@ -52,6 +52,6 @@ Write-Host "  2. Navigate to Task Scheduler Library" -ForegroundColor Gray
 Write-Host "  3. Search for: AI-Pharmacy Git Auto-Push" -ForegroundColor Gray
 Write-Host ""
 Write-Host "To test it manually:" -ForegroundColor Yellow
-Write-Host "  powershell -NoProfile -ExecutionPolicy Bypass -File $ScriptPath" -ForegroundColor Gray
+Write-Host ('  powershell -NoProfile -ExecutionPolicy Bypass -File ' + $ScriptPath) -ForegroundColor Gray
 
 exit 0
