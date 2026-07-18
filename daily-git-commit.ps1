@@ -19,16 +19,6 @@ catch {
 git config user.name "joroshdy12596" | Out-Null
 git config user.email "joroshdy12596@gmail.com" | Out-Null
 
-$branch = git branch --show-current 2>$null
-if ($LASTEXITCODE -eq 0 -and $branch) {
-    Write-Host "Running: git pull --rebase --autostash origin $branch" -ForegroundColor Yellow
-    git pull --rebase --autostash origin $branch
-}
-else {
-    Write-Host "Running: git pull --rebase --autostash origin HEAD" -ForegroundColor Yellow
-    git pull --rebase --autostash origin HEAD
-}
-
 Write-Host "Running: git add -A" -ForegroundColor Yellow
 git add -A
 
