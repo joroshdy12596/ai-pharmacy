@@ -173,7 +173,7 @@
     </style>
 
     <script>
-    // Auto-hide expiry alert after 8 seconds
+    // Auto-hide expiry alert after 2 minutes
     document.addEventListener('DOMContentLoaded', function() {
         const expiryAlert = document.querySelector('.expiry-alert-enhanced');
         if (expiryAlert) {
@@ -182,7 +182,7 @@
                 setTimeout(function() {
                     expiryAlert.remove();
                 }, 500);
-            }, 8000);
+            }, 120000);
         }
     });
     </script>
