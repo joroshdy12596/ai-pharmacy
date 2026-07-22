@@ -1,77 +1,35 @@
-# Setup Windows Task Scheduler for Hourly Git Push
-# Run this script as Administrator to create the scheduled task
+# Setup Windows Task Scheduler for Git Auto-Push every 30 minutes
+# This uses the same Git credential flow as your VS Code terminal.
 
-# Check if running as Administrator
-$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+$TaskName = 'AI-Pharmacy Git Auto-Push'
+$ScriptPath = 'C:\Users\Dr.ESRAA\Desktop\ai-pharmacy\daily-git-commit.ps1'
 
-if (-not $isAdmin) {
-    Write-Host "ERROR: This script must be run as Administrator!" -ForegroundColor Red
-    Write-Host "Right-click PowerShell and select 'Run as administrator'" -ForegroundColor Yellow
-    exit 1
-}
+Write-Host 'Setting up Windows Task Scheduler...' -ForegroundColor Cyan
 
-$TaskName = "AI-Pharmacy Hourly Git Push"
-$ScriptPath = "C:\Users\Dr.ESRAA\Desktop\ai-pharmacy\hourly-git-push.ps1"
-
-Write-Host "Setting up Windows Task Scheduler..." -ForegroundColor Cyan
-
-# Remove the old daily task if it exists, so there's only one job pushing
-$oldTaskName = "AI-Pharmacy Daily Git Commit"
-$oldTask = Get-ScheduledTask -TaskName $oldTaskName -ErrorAction SilentlyContinue
-if ($oldTask) {
-    Write-Host "Removing old daily task '$oldTaskName'..." -ForegroundColor Yellow
-    Unregister-ScheduledTask -TaskName $oldTaskName -Confirm:$false
-}
-
-# Check if task already exists
 $taskExists = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-
 if ($taskExists) {
-    Write-Host "Task already exists. Removing old task..." -ForegroundColor Yellow
+    Write-Host 'Task already exists. Removing old task...' -ForegroundColor Yellow
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
 }
 
-# Create trigger: start at the next top of hour, repeat every 1 hour, indefinitely
-$startTime = (Get-Date).Date.AddHours((Get-Date).Hour + 1)
-$trigger = New-ScheduledTaskTrigger -Once -At $startTime `
-    -RepetitionInterval (New-TimeSpan -Hours 1) `
-    -RepetitionDuration ([TimeSpan]::MaxValue)
+$startAt = [DateTime]::Now.AddMinutes(5)
+$trigger = New-ScheduledTaskTrigger -Once -At $startAt -RepetitionInterval (New-TimeSpan -Minutes 30) -RepetitionDuration (New-TimeSpan -Days 3650)
+$scriptArgs = '-NoProfile -ExecutionPolicy Bypass -File "' + $ScriptPath + '"'
+$action = New-ScheduledTaskAction -Execute 'PowerShell.exe' -Argument $scriptArgs
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RunOnlyIfNetworkAvailable -StartWhenAvailable -MultipleInstances IgnoreNew
 
-# Create action (run PowerShell script)
-$arg = "-NoProfile -ExecutionPolicy Bypass -File `"$ScriptPath`""
-$action = New-ScheduledTaskAction `
-    -Execute "PowerShell.exe" `
-    -Argument $arg
+Register-ScheduledTask -TaskName $TaskName -Trigger $trigger -Action $action -Settings $settings -Description 'Automatically commits changes and pushes them to GitHub every 30 minutes' -Force
 
-# Create task settings
-$settings = New-ScheduledTaskSettingsSet `
-    -RunOnlyIfNetworkAvailable `
-    -StartWhenAvailable `
-    -MultipleInstances IgnoreNew
-
-# Create the scheduled task
-Register-ScheduledTask `
-    -TaskName $TaskName `
-    -Trigger $trigger `
-    -Action $action `
-    -Settings $settings `
-    -Description "Automatically commits all changes and pushes to Git every hour" `
-    -Force
-
-Write-Host "Task created successfully!" -ForegroundColor Green
-Write-Host ""
-Write-Host "Task Details:" -ForegroundColor Cyan
-Write-Host "  Name: $TaskName" -ForegroundColor White
-Write-Host "  Frequency: Every 1 hour, starting $startTime" -ForegroundColor White
-Write-Host "  Script: $ScriptPath" -ForegroundColor White
-Write-Host ""
-Write-Host "To manage this task:" -ForegroundColor Yellow
-Write-Host "  1. Open 'Task Scheduler'" -ForegroundColor Gray
-Write-Host "  2. Navigate to Task Scheduler Library" -ForegroundColor Gray
-Write-Host "  3. Search for: AI-Pharmacy Hourly Git Push" -ForegroundColor Gray
-Write-Host ""
-Write-Host "To run the task manually for testing:" -ForegroundColor Yellow
-$msg = "  powershell -NoProfile -ExecutionPolicy Bypass -File $ScriptPath"
-Write-Host $msg -ForegroundColor Gray
+Write-Host '✓ Task created successfully!' -ForegroundColor Green
+Write-Host ''
+Write-Host 'Task Details:' -ForegroundColor Cyan
+Write-Host ('  Name: ' + $TaskName) -ForegroundColor White
+Write-Host ('  Script: ' + $ScriptPath) -ForegroundColor White
+Write-Host '  Frequency: Every 30 minutes' -ForegroundColor White
+Write-Host ''
+Write-Host 'To manage this task:' -ForegroundColor Yellow
+Write-Host '  1. Open Task Scheduler' -ForegroundColor Gray
+Write-Host '  2. Navigate to Task Scheduler Library' -ForegroundColor Gray
+Write-Host '  3. Search for: AI-Pharmacy Git Auto-Push' -ForegroundColor Gray
 
 exit 0

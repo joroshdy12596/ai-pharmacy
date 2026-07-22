@@ -95,6 +95,28 @@ class ExpiryReportBucketTests(TestCase):
         self.assertEqual(resp.context['expiring_90'].count(), 1)
         self.assertIn('Test 75d', resp.content.decode())
 
+    def test_zero_quantity_entries_are_hidden_from_expiry_report(self):
+        today = timezone.now().date()
+        m = Medicine.objects.create(
+            name='Zero Qty Item',
+            description='d',
+            price=4.0,
+            purchase_price=1.5,
+            stock=0,
+            category='OTC',
+            barcode_number='7777777777777'
+        )
+        StockEntry.objects.create(medicine=m, quantity=0, expiration_date=today + timedelta(days=10))
+
+        resp = self.client.get(reverse('pharmacy:expiry_report'))
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn('Zero Qty Item', resp.content.decode())
+        self.assertEqual(resp.context['expiring_30'].count(), 0)
+        self.assertEqual(resp.context['expiring_60'].count(), 0)
+        self.assertEqual(resp.context['expiring_90'].count(), 0)
+        self.assertEqual(resp.context['expired'].count(), 0)
+
     @override_settings(REPORTS_BASIC_AUTH_PASS='secret')
     def test_expiry_report_public_without_basic_auth(self):
         """Ensure the expiry report is accessible anonymously even when reports basic auth is set."""

@@ -1134,30 +1134,31 @@ def inventory_report(request):
 
 def expiry_report(request):
     today = timezone.now().date()
+    active_stock_entries = StockEntry.objects.filter(quantity__gt=0).select_related('medicine')
     
     # Get expiring items grouped by timeframe
-    expiring_30 = StockEntry.objects.filter(
+    expiring_30 = active_stock_entries.filter(
         expiration_date__range=[today, today + timezone.timedelta(days=30)]
-    ).select_related('medicine')
+    )
     
-    expiring_60 = StockEntry.objects.filter(
+    expiring_60 = active_stock_entries.filter(
         expiration_date__range=[
             today + timezone.timedelta(days=31),
             today + timezone.timedelta(days=60)
         ]
-    ).select_related('medicine')
+    )
 
     # New bucket: Expiring in 61-90 days
-    expiring_90 = StockEntry.objects.filter(
+    expiring_90 = active_stock_entries.filter(
         expiration_date__range=[
             today + timezone.timedelta(days=61),
             today + timezone.timedelta(days=90)
         ]
-    ).select_related('medicine')
+    )
     
-    expired = StockEntry.objects.filter(
+    expired = active_stock_entries.filter(
         expiration_date__lt=today
-    ).select_related('medicine')
+    )
     
     context = {
         'expiring_30': expiring_30,
