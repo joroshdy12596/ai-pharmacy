@@ -1,7 +1,6 @@
-# Setup Windows Task Scheduler for Hourly Git Push
+# Setup Windows Task Scheduler for Hourly Git Data Pull (deployment side)
 # Run this script as Administrator to create the scheduled task
 
-# Check if running as Administrator
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 if (-not $isAdmin) {
@@ -10,20 +9,11 @@ if (-not $isAdmin) {
     exit 1
 }
 
-$TaskName = "AI-Pharmacy Hourly Git Push"
-$ScriptPath = "C:\Users\Dr.ESRAA\Desktop\ai-pharmacy\hourly-git-push.ps1"
+$TaskName = "AI-Pharmacy Hourly Git Pull"
+$ScriptPath = "C:\Users\Mahmoud\ai-pharmacy\hourly-git-pull.ps1"
 
 Write-Host "Setting up Windows Task Scheduler..." -ForegroundColor Cyan
 
-# Remove the old daily task if it exists, so there's only one job pushing
-$oldTaskName = "AI-Pharmacy Daily Git Commit"
-$oldTask = Get-ScheduledTask -TaskName $oldTaskName -ErrorAction SilentlyContinue
-if ($oldTask) {
-    Write-Host "Removing old daily task '$oldTaskName'..." -ForegroundColor Yellow
-    Unregister-ScheduledTask -TaskName $oldTaskName -Confirm:$false
-}
-
-# Check if task already exists
 $taskExists = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 
 if ($taskExists) {
@@ -31,31 +21,30 @@ if ($taskExists) {
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
 }
 
-# Create trigger: start at the next top of hour, repeat every 1 hour, indefinitely
-$startTime = (Get-Date).Date.AddHours((Get-Date).Hour + 1)
+# Start at the next top of hour, repeat every 1 hour, indefinitely.
+# Offset by 10 minutes from the push schedule so the pull always runs
+# after that hour's push has had time to land on GitHub.
+$startTime = (Get-Date).Date.AddHours((Get-Date).Hour + 1).AddMinutes(10)
 $trigger = New-ScheduledTaskTrigger -Once -At $startTime `
     -RepetitionInterval (New-TimeSpan -Hours 1) `
     -RepetitionDuration ([TimeSpan]::MaxValue)
 
-# Create action (run PowerShell script)
 $arg = "-NoProfile -ExecutionPolicy Bypass -File `"$ScriptPath`""
 $action = New-ScheduledTaskAction `
     -Execute "PowerShell.exe" `
     -Argument $arg
 
-# Create task settings
 $settings = New-ScheduledTaskSettingsSet `
     -RunOnlyIfNetworkAvailable `
     -StartWhenAvailable `
     -MultipleInstances IgnoreNew
 
-# Create the scheduled task
 Register-ScheduledTask `
     -TaskName $TaskName `
     -Trigger $trigger `
     -Action $action `
     -Settings $settings `
-    -Description "Automatically commits all changes and pushes to Git every hour" `
+    -Description "Fetches db.sqlite3 from GitHub every hour, if changed, without touching app code" `
     -Force
 
 Write-Host "Task created successfully!" -ForegroundColor Green
@@ -64,11 +53,6 @@ Write-Host "Task Details:" -ForegroundColor Cyan
 Write-Host "  Name: $TaskName" -ForegroundColor White
 Write-Host "  Frequency: Every 1 hour, starting $startTime" -ForegroundColor White
 Write-Host "  Script: $ScriptPath" -ForegroundColor White
-Write-Host ""
-Write-Host "To manage this task:" -ForegroundColor Yellow
-Write-Host "  1. Open 'Task Scheduler'" -ForegroundColor Gray
-Write-Host "  2. Navigate to Task Scheduler Library" -ForegroundColor Gray
-Write-Host "  3. Search for: AI-Pharmacy Hourly Git Push" -ForegroundColor Gray
 Write-Host ""
 Write-Host "To run the task manually for testing:" -ForegroundColor Yellow
 $msg = "  powershell -NoProfile -ExecutionPolicy Bypass -File $ScriptPath"

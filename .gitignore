@@ -2,3 +2,8 @@
 .env
 
 media/barcodes/
+
+# Guest-submitted data (prescription requests) - deliberately kept out of
+# the git sync pipeline, see pharmacy/db_router.py
+guest_data.sqlite3
+guest_data.sqlite3-*

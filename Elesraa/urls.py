@@ -16,11 +16,13 @@ Including another URLconf
 """
 
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib.auth import views as auth_views
+from django.views.static import serve
 from pharmacy.views import SignUpView
+from pharmacy.views_webhook import github_data_sync_webhook
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -29,7 +31,12 @@ urlpatterns = [
     path('login/', auth_views.LoginView.as_view(template_name='pharmacy/login.html'), name='login'),
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
     path('signup/', SignUpView.as_view(), name='signup'),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    path('webhook/github-data-sync/', github_data_sync_webhook, name='github_data_sync_webhook'),
+    # Explicit route (not django.conf.urls.static.static(), which silently
+    # no-ops when DEBUG=False) so uploaded media - prescription photos,
+    # product images, profile pics - keeps being served in production too.
+    re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
+]
 
 if settings.DEBUG:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

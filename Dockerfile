@@ -12,6 +12,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     fonts-dejavu \
     udev \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
@@ -35,4 +36,6 @@ RUN mkdir -p /dev/usb
 RUN chmod -R 777 /dev/usb || true
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+# Shell form (not exec-form array) so ${PORT} expands - Render assigns its
+# own port via this env var; falls back to 8000 for local docker-compose.
+CMD python manage.py runserver 0.0.0.0:${PORT:-8000}

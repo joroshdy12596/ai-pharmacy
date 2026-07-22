@@ -1,5 +1,3 @@
-version: '3'
-
 services:
   web:
     build: .
@@ -20,10 +18,30 @@ services:
       - "host.docker.internal:host-gateway"
     environment:
       - DJANGO_SETTINGS_MODULE=Elesraa.settings
-      - DJANGO_SUPERUSER_USERNAME=admin
-      - DJANGO_SUPERUSER_PASSWORD=admin
-      - DJANGO_SUPERUSER_EMAIL=admin@example.com
+      - DJANGO_SUPERUSER_USERNAME=${DJANGO_SUPERUSER_USERNAME:-admin}
+      - DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD:-admin}
+      - DJANGO_SUPERUSER_EMAIL=${DJANGO_SUPERUSER_EMAIL:-admin@example.com}
+      - DJANGO_DEBUG=${DJANGO_DEBUG:-False}
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-localhost 127.0.0.1 [::1]}
+      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-}
+      - SECRET_KEY=${SECRET_KEY:-}
+      - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - PUBLIC_SITE_URL=${PUBLIC_SITE_URL:-}
+      - WHATSAPP_NUMBER=${WHATSAPP_NUMBER:-}
     restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    # Quick Tunnel mode: no domain/token needed, prints a random
+    # https://<random-words>.trycloudflare.com URL in its logs on each start.
+    # Switch back to `tunnel --no-autoupdate run` with TUNNEL_TOKEN once a
+    # real domain is added to Cloudflare, for a stable hostname.
+    command: tunnel --no-autoupdate --url http://web:8000
+    depends_on:
+      - web
 
 volumes:
   static_volume:

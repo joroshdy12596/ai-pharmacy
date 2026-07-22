@@ -1,0 +1,34 @@
+{% extends 'pharmacy/base.html' %}
+{% load static %}
+{% block content %}
+<div class="container-fluid py-4">
+    <h3><i class="fas fa-file-medical"></i> طلبات الروشتات / Prescription Requests</h3>
+
+    <h5 class="mt-4">قيد الانتظار / Pending ({{ pending|length }})</h5>
+    {% if pending %}
+        <div class="list-group mb-4">
+            {% for req in pending %}
+                <a href="{% url 'pharmacy:staff_prescription_reply' req.id %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>#{{ req.id }}</strong>
+                        <span class="badge bg-secondary">{{ req.guest_name }} - {{ req.guest_phone }}</span>
+                    </div>
+                    <small class="text-muted">{{ req.created_at|timesince }} ago</small>
+                </a>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="text-muted">لا يوجد طلبات جديدة / No pending requests</p>
+    {% endif %}
+
+    <h5 class="mt-4">تم الرد / Recently Replied</h5>
+    <div class="list-group">
+        {% for req in replied %}
+            <a href="{% url 'pharmacy:staff_prescription_reply' req.id %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                <div><strong>#{{ req.id }}</strong> <span class="text-muted small">{{ req.reply_text|truncatechars:60 }}</span></div>
+                <small class="text-muted">{{ req.replied_at|timesince }} ago</small>
+            </a>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

@@ -2,12 +2,22 @@ from django.urls import path, include
 from . import views
 from .views_most_sold import most_sold_products
 from .views_profit import profit_report
+from .views_public_search import public_medicine_search
+from .views_guest_prescription import (
+    guest_prescription_upload, guest_prescription_status,
+    staff_prescription_queue, staff_prescription_reply,
+)
 
 app_name = 'pharmacy'
 
 urlpatterns = [
     path('return/', views.return_product, name='return_product'),
     path('', views.home, name='home'),
+    path('find-medicine/', public_medicine_search, name='public_medicine_search'),
+    path('upload-prescription/', guest_prescription_upload, name='guest_prescription_upload'),
+    path('prescription-status/<str:token>/', guest_prescription_status, name='guest_prescription_status'),
+    path('staff/prescription-queue/', staff_prescription_queue, name='staff_prescription_queue'),
+    path('staff/prescription-queue/<int:pk>/', staff_prescription_reply, name='staff_prescription_reply'),
     path('medicines/', views.MedicineListView.as_view(), name='medicine_list'),
     path('medicine/<int:pk>/', views.MedicineDetailView.as_view(), name='medicine_detail'),
     path('medicine/add/', views.MedicineCreateView.as_view(), name='medicine_add'),

@@ -1,7 +1,9 @@
 from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
 from django.db.models import Sum, F
 from .models import SaleItem, Medicine
 
+@login_required
 def most_sold_products(request):
     # Aggregate total sold for each medicine (by unit type)
     most_sold = (

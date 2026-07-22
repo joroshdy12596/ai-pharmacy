@@ -93,7 +93,6 @@ from .mixins import RoleRequiredMixin
 import csv
 from datetime import datetime, timedelta
 from django.core.exceptions import ValidationError
-import requests
 from decimal import Decimal
 import statistics
 

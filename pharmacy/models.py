@@ -580,6 +580,48 @@ class ProfitAnalytics(models.Model):
         
         return analytics
 
+class GuestPrescriptionRequest(models.Model):
+    """A prescription photo uploaded by a guest (no account) asking staff to
+    check what's available. Not related to the internal Prescription model,
+    which tracks doctor-issued prescriptions tied to an existing Customer."""
+
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('REPLIED', 'Replied'),
+    ]
+
+    image = models.ImageField(upload_to='guest_prescriptions/')
+    wants_immediate_reply = models.BooleanField(
+        default=True,
+        help_text='True if the guest is waiting on the page now; False if they will come back later'
+    )
+    guest_name = models.CharField(max_length=100, blank=True)
+    guest_phone = models.CharField(max_length=20, blank=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='PENDING')
+    reply_text = models.TextField(blank=True)
+    tracking_token = models.CharField(max_length=32, unique=True, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    replied_at = models.DateTimeField(null=True, blank=True)
+    # Plain username, not a ForeignKey to User: this model lives in a
+    # separate database file (see pharmacy.db_router) from auth_user, and
+    # SQLite cannot enforce a foreign key across two separate database files.
+    replied_by_username = models.CharField(max_length=150, blank=True)
+    reminder_count = models.PositiveIntegerField(default=0)
+    last_reminded_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Guest request #{self.id} ({self.get_status_display()})"
+
+    def save(self, *args, **kwargs):
+        if not self.tracking_token:
+            import secrets
+            self.tracking_token = secrets.token_urlsafe(16)
+        super().save(*args, **kwargs)
+
+
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
     if created:

@@ -1,3 +1,5 @@
+import re
+
 from django import forms
 from .models import Medicine
 from django.contrib.auth.forms import UserCreationForm
@@ -7,7 +9,7 @@ from .models import Purchase
 from .models import PurchaseItem
 from .models import Customer
 from django.forms import inlineformset_factory
-from .models import Prescription, PrescriptionItem
+from .models import Prescription, PrescriptionItem, GuestPrescriptionRequest
 
 class MedicineForm(forms.ModelForm):
     barcode_number = forms.CharField(
@@ -194,3 +196,48 @@ PrescriptionItemFormSet = inlineformset_factory(
     min_num=1,  # Minimum number of forms
     validate_min=True,  # Enforce minimum number
 )
+
+
+class GuestPrescriptionRequestForm(forms.ModelForm):
+    class Meta:
+        model = GuestPrescriptionRequest
+        fields = ['image', 'guest_name', 'guest_phone']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['guest_name'].required = True
+        self.fields['guest_phone'].required = True
+
+    def clean_guest_name(self):
+        name = self.cleaned_data.get('guest_name', '').strip()
+        # Arabic + English letters and spaces only - catches accidental
+        # digits/junk typed into the wrong field.
+        if not re.match(r'^[؀-ۿa-zA-Z\s]+$', name):
+            raise forms.ValidationError(
+                'الاسم يجب أن يحتوي على حروف فقط / Name must contain letters only'
+            )
+        if len(name) < 3:
+            raise forms.ValidationError(
+                'الاسم قصير جدًا / Name is too short'
+            )
+        return name
+
+    def clean_guest_phone(self):
+        phone = self.cleaned_data.get('guest_phone', '').strip()
+        phone = re.sub(r'[\s-]', '', phone)
+        if not re.match(r'^01[0125][0-9]{8}$', phone):
+            raise forms.ValidationError(
+                'رقم موبايل مصري غير صحيح (مثال: 01012345678) / '
+                'Invalid Egyptian mobile number (e.g. 01012345678)'
+            )
+        return phone
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        # No more "wait now vs come back later" choice - everyone gets a
+        # follow-up link and leaves contact info, so staff can always reach
+        # them regardless of whether they're still around.
+        instance.wants_immediate_reply = True
+        if commit:
+            instance.save()
+        return instance

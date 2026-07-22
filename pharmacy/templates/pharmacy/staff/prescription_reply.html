@@ -1,0 +1,42 @@
+{% extends 'pharmacy/base.html' %}
+{% load static %}
+{% block content %}
+<div class="container-fluid py-4">
+    <a href="{% url 'pharmacy:staff_prescription_queue' %}" class="btn btn-sm btn-outline-secondary mb-3">
+        <i class="fas fa-arrow-right"></i> رجوع / Back
+    </a>
+
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <h5>صورة الروشتة / Prescription photo</h5>
+            <img src="{{ req.image.url }}" class="img-fluid rounded border" alt="Prescription">
+            <dl class="row mt-3">
+                <dt class="col-sm-4">الحالة / Status</dt>
+                <dd class="col-sm-8">{{ req.get_status_display }}</dd>
+                <dt class="col-sm-4">الاسم / Name</dt>
+                <dd class="col-sm-8">{{ req.guest_name }}</dd>
+                <dt class="col-sm-4">الموبايل / Phone</dt>
+                <dd class="col-sm-8">{{ req.guest_phone }}</dd>
+                <dt class="col-sm-4">التاريخ / Date</dt>
+                <dd class="col-sm-8">{{ req.created_at }}</dd>
+            </dl>
+        </div>
+
+        <div class="col-md-6">
+            <h5>الرد / Reply</h5>
+            {% if req.status == 'REPLIED' %}
+                <div class="alert alert-success" dir="auto">{{ req.reply_text|linebreaks }}</div>
+                <p class="text-muted small">تم الرد بواسطة {{ req.replied_by_username }} - {{ req.replied_at }}</p>
+            {% endif %}
+            <form method="post">
+                {% csrf_token %}
+                <textarea name="reply_text" class="form-control mb-3" rows="6" dir="auto"
+                          placeholder="اكتب اللي متوفر واللي مش متوفر / Write what's available and what's missing">{{ req.reply_text }}</textarea>
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-paper-plane"></i> إرسال الرد / Send reply
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

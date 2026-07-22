@@ -28,9 +28,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-default-key')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True  # Changed to always be True during development
+DEBUG = os.getenv('DJANGO_DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost 127.0.0.1 [::1]').split(' ')
+
+# Needed once the app is reachable through the Cloudflare Tunnel: the tunnel
+# terminates TLS and forwards plain HTTP, so Django needs to trust that
+# X-Forwarded-Proto header and know which origins are allowed to POST here.
+CSRF_TRUSTED_ORIGINS = [o for o in os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',') if o]
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 
 # Application definition
@@ -48,6 +55,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     # enforce basic auth for /reports/ urls when configured
@@ -71,6 +79,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "pharmacy.context_processors.guest_contact",
             ],
         },
     },
@@ -86,8 +95,17 @@ DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": str(BASE_DIR / "db.sqlite3"),
-    }
+    },
+    # Guest-submitted data (prescription requests) lives in its own file so
+    # the GitHub-webhook sync of db.sqlite3 (pulled from the pharmacy PC)
+    # can never overwrite/wipe it out. See pharmacy/db_router.py.
+    "guest_data": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": str(BASE_DIR / "guest_data.sqlite3"),
+    },
 }
+
+DATABASE_ROUTERS = ["pharmacy.db_router.GuestDataRouter"]
 
 
 # Password validation
@@ -131,7 +149,10 @@ PRINTER_SETTINGS = {
 
 # Static files settings
 STATIC_URL = '/static/'
-STATIC_ROOT = None
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+# Serves static files directly from the app (works with DEBUG=False, no
+# separate nginx/reverse proxy needed for a single-instance deployment).
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 # Media files settings
 MEDIA_URL = '/media/'
@@ -143,6 +164,28 @@ LOGOUT_REDIRECT_URL = 'pharmacy:home'
 
 OPENAI_API_KEY = 'your-api-key-here'  # Remember to keep this secret in production
 HUGGINGFACE_API_KEY = os.environ.get('HUGGINGFACE_API_KEY')
+
+# Shared secret used to verify GitHub webhook deliveries to
+# /webhook/github-data-sync/ (see pharmacy/views_webhook.py). Must match the
+# secret configured on the GitHub repo's webhook settings.
+GITHUB_WEBHOOK_SECRET = os.getenv('GITHUB_WEBHOOK_SECRET', '')
+
+# Telegram bot used to notify staff of new guest prescription uploads
+# (see pharmacy/telegram_utils.py). Create a bot via @BotFather and get the
+# chat id by messaging the bot then visiting
+# https://api.telegram.org/bot<TOKEN>/getUpdates
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '')
+
+# Public base URL (no trailing slash) used to build absolute links in
+# messages sent from contexts with no HTTP request, e.g. the
+# remind_pending_prescriptions management command. Update this whenever the
+# Cloudflare Tunnel URL changes.
+PUBLIC_SITE_URL = os.getenv('PUBLIC_SITE_URL', '').rstrip('/')
+
+# International format, no leading 0/+ (e.g. 201022815980 for Egypt), used
+# to build the wa.me click-to-chat link on guest-facing pages.
+WHATSAPP_NUMBER = os.getenv('WHATSAPP_NUMBER', '')
 
 # Basic auth for /reports/ (leave empty to disable or override via env)
 REPORTS_BASIC_AUTH_USER = os.getenv('REPORTS_BASIC_AUTH_USER', '')

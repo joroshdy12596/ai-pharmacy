@@ -2,8 +2,12 @@ from django.db.models import Sum
 from pharmacy.models import Sale, SaleItem
 
 def get_total_profit():
-    # Sum all profits from all sale items (using Python, not ORM)
-    total_profit = sum(item.profit for item in SaleItem.objects.select_related('medicine', 'sale').all())
+    # Sum profits only from completed sales, to match get_total_revenue()
+    total_profit = sum(
+        item.profit for item in SaleItem.objects
+        .filter(sale__is_completed=True)
+        .select_related('medicine', 'sale')
+    )
     return total_profit
 
 def get_total_revenue():

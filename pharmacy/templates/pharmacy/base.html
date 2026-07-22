@@ -219,6 +219,16 @@
                             <span>Search</span>
                         </a>
                     </li>
+
+                    {% if user.is_authenticated %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if 'prescription-queue' in request.path %}active{% endif %}"
+                           href="{% url 'pharmacy:staff_prescription_queue' %}">
+                            <i class="fas fa-file-medical"></i>
+                            <span>Prescription Requests</span>
+                        </a>
+                    </li>
+                    {% endif %}
                 </ul>
                 
                 <!-- User Section (Right Side) -->

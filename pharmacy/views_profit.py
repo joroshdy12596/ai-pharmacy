@@ -1,12 +1,14 @@
 from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
 from .utils_profit import get_total_profit, get_total_revenue
 from pharmacy.models import Sale, SaleItem
 from django.utils.dateparse import parse_date
 
+@login_required
 def profit_report(request):
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
-    sale_items = SaleItem.objects.select_related('medicine', 'sale')
+    sale_items = SaleItem.objects.filter(sale__is_completed=True).select_related('medicine', 'sale')
     sales = Sale.objects.filter(is_completed=True)
     if start_date:
         sale_items = sale_items.filter(sale__created_at__date__gte=start_date)
