@@ -37,6 +37,14 @@ if ($SkipPush) {
     exit 0
 }
 
+$branchName = git branch --show-current
+if (-not $branchName) {
+    $branchName = 'main'
+}
+
+Write-Host "Running: git pull --rebase origin $branchName" -ForegroundColor Yellow
+git pull --rebase origin $branchName
+
 Write-Host "Running: git push origin HEAD" -ForegroundColor Yellow
 git push origin HEAD
 
