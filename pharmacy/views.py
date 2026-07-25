@@ -1955,10 +1955,6 @@ def print_invoice_thermal(sale, completed_items, extra, printer_name=None):
     Returns True on success, raises on failure (caller decides how to report it).
     """
     import win32print
-    import win32ui
-    import win32gui
-    import win32con
-    from PIL import ImageWin
 
     printer_name = printer_name or settings.PRINTER_SETTINGS['PRINTER_PATH']
     DPI = settings.PRINTER_SETTINGS['PRINTER_DPI']
@@ -2120,42 +2116,58 @@ def print_invoice_thermal(sale, completed_items, extra, printer_name=None):
         elif kind == "space":
             y += text
 
-    # Try to print on a custom continuous paper size matching the roll width and
-    # the exact receipt length, so the printer's own gap sensor (tuned for the
-    # die-cut label roll) isn't fighting a page size meant for labels. Falls back
-    # to the printer's current default paper/page settings if the driver rejects
-    # a custom size (as barcode_print() has always done).
+    # Print via a raw TSPL command stream instead of the Windows GDI print path.
+    # GDI printing goes through the driver's own saved page-size/sensor defaults
+    # (tuned for the die-cut barcode roll), so on the continuous invoice roll the
+    # printer kept hunting for a label gap that doesn't exist and fed a long
+    # stretch of paper before giving up. TSPL's "GAP 0 mm,0 mm" line tells the
+    # printer firmware directly, on every single job, "this stock has no gaps" —
+    # confirmed on the real printer to print cleanly with no extra feed.
     height_mm = (height_px / DPI) * MM_TO_INCH
-    hDC = None
-    try:
-        hprinter = win32print.OpenPrinter(printer_name)
-        try:
-            printer_info = win32print.GetPrinter(hprinter, 2)
-            devmode = printer_info['pDevMode']
-            devmode.PaperSize = 256  # DMPAPER_USER
-            devmode.PaperWidth = int(PAPER_WIDTH_MM * 10)   # tenths of a millimeter
-            devmode.PaperLength = int(height_mm * 10)
-            devmode.Fields |= win32con.DM_PAPERSIZE | win32con.DM_PAPERWIDTH | win32con.DM_PAPERLENGTH
-        finally:
-            win32print.ClosePrinter(hprinter)
-        hdc_handle = win32gui.CreateDC("WINSPOOL", printer_name, devmode)
-        hDC = win32ui.CreateDCFromHandle(hdc_handle)
-        printer_size = (image.size[0], image.size[1])
-    except Exception:
-        logger.warning("Custom invoice paper size not accepted by printer driver, falling back to default page size", exc_info=True)
-        hDC = win32ui.CreateDC()
-        hDC.CreatePrinterDC(printer_name)
-        printer_size = hDC.GetDeviceCaps(110), hDC.GetDeviceCaps(111)
+    width_px, height_px_final = image.size
+    bytes_per_row = (width_px + 7) // 8
+    pixels = image.load()
+    bitmap_data = bytearray(bytes_per_row * height_px_final)
+    for y in range(height_px_final):
+        row_offset = y * bytes_per_row
+        byte = 0
+        bit_count = 0
+        col = 0
+        for x in range(width_px):
+            bit = 1 if pixels[x, y] < 128 else 0  # TSPL: 1 = printed (black), 0 = blank
+            byte = (byte << 1) | bit
+            bit_count += 1
+            if bit_count == 8:
+                bitmap_data[row_offset + col] = byte
+                col += 1
+                byte = 0
+                bit_count = 0
+        if bit_count:
+            bitmap_data[row_offset + col] = byte << (8 - bit_count)
 
-    x = max(0, int((printer_size[0] - image.size[0]) / 2))
-    y = 0
-    hDC.StartDoc(f"Invoice {sale.id}")
-    hDC.StartPage()
-    dib = ImageWin.Dib(image)
-    dib.draw(hDC.GetHandleOutput(), (x, y, x + image.size[0], y + image.size[1]))
-    hDC.EndPage()
-    hDC.EndDoc()
-    hDC.DeleteDC()
+    header = (
+        f"SIZE {PAPER_WIDTH_MM} mm, {height_mm:.1f} mm\r\n"
+        "GAP 0 mm, 0 mm\r\n"
+        "DENSITY 8\r\n"
+        "DIRECTION 0\r\n"
+        "REFERENCE 0,0\r\n"
+        "CLS\r\n"
+        f"BITMAP 0,0,{bytes_per_row},{height_px_final},0,"
+    ).encode("ascii")
+    footer = b"\r\nPRINT 1\r\n"
+    payload = header + bytes(bitmap_data) + footer
+
+    hprinter = win32print.OpenPrinter(printer_name)
+    try:
+        job = win32print.StartDocPrinter(hprinter, 1, (f"Invoice {sale.id}", None, "RAW"))
+        try:
+            win32print.StartPagePrinter(hprinter)
+            win32print.WritePrinter(hprinter, payload)
+            win32print.EndPagePrinter(hprinter)
+        finally:
+            win32print.EndDocPrinter(hprinter)
+    finally:
+        win32print.ClosePrinter(hprinter)
     return True
 
 
