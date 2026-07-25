@@ -732,7 +732,7 @@ def pos_complete_sale(request):
                 f'Manual discount {discount_percentage}%' if discount_percentage > 0 else None
             ),
             'points_added': points_added,
-            'created_at': timezone.now().strftime('%Y-%m-%d %H:%M:%S')
+            'created_at': timezone.localtime(timezone.now()).strftime('%Y-%m-%d %H:%M:%S')
         }
         
         messages.success(request, f'Sale completed successfully. Sale ID: {sale.id}')
@@ -740,12 +740,15 @@ def pos_complete_sale(request):
         # Print the invoice straight to the thermal printer (same device as the
         # barcode labels, loaded with the continuous receipt roll instead of the
         # die-cut label roll). A printer failure must not undo the sale, which is
-        # already committed to the database at this point.
-        try:
-            print_invoice_thermal(sale, request.session['completed_sale']['items'], request.session['completed_sale'])
-        except Exception as e:
-            logger.error(f"Failed to print invoice for sale {sale.id}: {e}", exc_info=True)
-            messages.warning(request, 'تم حفظ البيع لكن حدث خطأ أثناء طباعة الفاتورة تلقائياً')
+        # already committed to the database at this point. Skipped entirely when
+        # the cashier picks "Complete Sale (No Print)" — e.g. the label roll is
+        # still loaded, or the printer isn't connected right now.
+        if request.POST.get('action') != 'no_print':
+            try:
+                print_invoice_thermal(sale, request.session['completed_sale']['items'], request.session['completed_sale'])
+            except Exception as e:
+                logger.error(f"Failed to print invoice for sale {sale.id}: {e}", exc_info=True)
+                messages.warning(request, 'تم حفظ البيع لكن حدث خطأ أثناء طباعة الفاتورة تلقائياً')
 
     except ValidationError as e:
         messages.error(request, str(e))
