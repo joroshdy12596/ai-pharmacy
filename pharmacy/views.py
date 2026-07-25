@@ -2175,6 +2175,8 @@ def barcode_print(request):
                 logger.info(f"Attempting to print barcode {barcode} to {printer_name}")
                 import win32print
                 import win32ui
+                import tempfile
+                import uuid
                 from PIL import ImageWin
                 # --- Label settings ---
                 LABEL_WIDTH_MM = 40
@@ -2278,29 +2280,52 @@ def barcode_print(request):
                 if price_y < 0:
                     price_y = 0
                 draw.text(((WIDTH_PX - price_w) // 2, price_y), PRICE, font=font, fill=0)
-                # Generate barcode image (suppress text inside barcode). Improve readability by
-                # increasing quiet zone/module height and using nearest-neighbor scaling so bars
-                # stay sharp for thermal printers and barcode scanners.
+                # Generate the barcode natively at the printer's DPI with a module width
+                # that is a whole number of pixels (module_width=0.25mm -> exactly 2px at
+                # 203 DPI). The previous approach rendered the barcode at python-barcode's
+                # default 300 DPI and then force-resized it with NEAREST to an unrelated
+                # target box — that resize rounds each bar's width differently, so bars
+                # end up slightly uneven, which is exactly what makes a scanner hunt/retry
+                # before it decodes. Generating at the exact target resolution up front
+                # means (in the common case) no resize is needed at all, so every bar is a
+                # clean, consistent width.
+                available_width_px = WIDTH_PX - 20  # leave a small horizontal margin
+                available_height_px = HEIGHT_PX - (5 + pharmacy_h + 2 + product_h + 5 + price_h + 15) - 10
+                if available_height_px < 24:
+                    available_height_px = 24
+                module_width_mm = 0.25  # 2px at 203 DPI
+                module_height_mm = (available_height_px / DPI) * MM_TO_INCH
+
+                # Unique-per-request path: two overlapping print requests (e.g. the
+                # auto-print fired from the "add stock" page racing a manual print from
+                # the barcode page) used to share one fixed "barcode_temp.png" filename,
+                # so whichever request wrote last would win and the other could end up
+                # reading and printing a *different product's* barcode.
                 code128 = pybarcode.get('code128', BARCODE_VALUE, writer=ImageWriter())
-                # Use a larger module_height and quiet_zone; write_text False removes human-readable numbers
-                barcode_img_path = code128.save("barcode_temp", options={"module_height": 18.0, "font_size": 10, "text_distance": 1, "quiet_zone": 4, "write_text": False})
-
-                # Compute available barcode area and resize using NEAREST to preserve hard edges
-                barcode_width = WIDTH_PX - 20  # leave a small horizontal margin
-                barcode_height = HEIGHT_PX - (5 + pharmacy_h + 2 + product_h + 5 + price_h + 15) - 10
-                if barcode_height < 24:
-                    barcode_height = 24
-
-                # Load and resize using nearest neighbor to avoid anti-aliasing
+                barcode_temp_base = os.path.join(tempfile.gettempdir(), f"barcode_{medicine.id}_{uuid.uuid4().hex}")
+                barcode_img_path = code128.save(barcode_temp_base, options={
+                    "module_width": module_width_mm,
+                    "module_height": module_height_mm,
+                    "quiet_zone": 2.0,
+                    "write_text": False,
+                    "dpi": DPI,
+                })
                 barcode_img = Image.open(barcode_img_path).convert("L")
-                barcode_resized = barcode_img.resize((barcode_width, barcode_height), resample=Image.NEAREST)
+
+                # Only reached for unusually long barcode numbers that don't fit at 2px/module.
+                # Shrink both dimensions by the same factor so bar-width ratios (and therefore
+                # scannability) are preserved, instead of stretching width and height separately.
+                if barcode_img.size[0] > available_width_px:
+                    scale = available_width_px / barcode_img.size[0]
+                    new_size = (available_width_px, max(1, int(barcode_img.size[1] * scale)))
+                    barcode_img = barcode_img.resize(new_size, resample=Image.NEAREST)
 
                 # Convert to strict black & white (monochrome) to ensure printer prints solid bars
-                barcode_mono = barcode_resized.point(lambda x: 0 if x < 128 else 255, '1')
+                barcode_mono = barcode_img.point(lambda x: 0 if x < 128 else 255, '1')
                 # Paste monochrome barcode onto label (convert to 'L' to match canvas mode)
                 barcode_paste = barcode_mono.convert("L")
                 barcode_y = 5 + pharmacy_h + 2 + product_h + 5
-                barcode_x = (WIDTH_PX - barcode_width) // 2
+                barcode_x = (WIDTH_PX - barcode_img.size[0]) // 2
                 image.paste(barcode_paste, (barcode_x, barcode_y))
                 # Print to Windows printer
                 hDC = win32ui.CreateDC()
