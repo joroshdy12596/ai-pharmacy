@@ -2134,7 +2134,7 @@ def print_invoice_thermal(sale, completed_items, extra, printer_name=None):
         bit_count = 0
         col = 0
         for x in range(width_px):
-            bit = 1 if pixels[x, y] < 128 else 0  # TSPL: 1 = printed (black), 0 = blank
+            bit = 0 if pixels[x, y] < 128 else 1  # this printer's BITMAP convention: 0 = printed (black), 1 = blank
             byte = (byte << 1) | bit
             bit_count += 1
             if bit_count == 8:
@@ -2143,7 +2143,8 @@ def print_invoice_thermal(sale, completed_items, extra, printer_name=None):
                 byte = 0
                 bit_count = 0
         if bit_count:
-            bitmap_data[row_offset + col] = byte << (8 - bit_count)
+            pad = 8 - bit_count
+            bitmap_data[row_offset + col] = (byte << pad) | ((1 << pad) - 1)  # pad with blank, not black
 
     header = (
         f"SIZE {PAPER_WIDTH_MM} mm, {height_mm:.1f} mm\r\n"
@@ -2602,12 +2603,15 @@ def invoice_print(request):
 
 @login_required
 def invoice_print_old(request, sale_id):
-    """View for printing old invoices from sales history"""
+    """Reprint an old sale from Sales History straight to the thermal printer —
+    same print_invoice_thermal() used for the POS checkout invoice, so a reprint
+    looks and prints identically to the original instead of going through the
+    old browser print-dialog page."""
+    referer = request.META.get('HTTP_REFERER')
+    fallback_redirect = redirect(referer) if referer else redirect('pharmacy:sales_history')
     try:
-        # Get the sale from database
         sale = get_object_or_404(Sale, id=sale_id, is_completed=True)
-        
-        # Prepare completed sale data from database
+
         completed_sale = {
             'id': sale.id,
             'customer': sale.customer.name if sale.customer else None,
@@ -2623,28 +2627,19 @@ def invoice_print_old(request, sale_id):
             ],
             'total': float(sale.total_amount),
             'original_total': float(sale.total_amount),
-            'discounts_applied': False,
-            'discount_percentage': 0,
             'discount_amount': 0,
             'cash_given': float(sale.cash_given),
             'change_return': float(sale.change_return),
-            'customer_type': sale.customer.get_customer_type_display() if sale.customer else None,
-            'discount_info': None,
-            'points_added': 0,
-            'created_at': sale.created_at.strftime('%Y-%m-%d %H:%M:%S')
+            'created_at': timezone.localtime(sale.created_at).strftime('%Y-%m-%d %H:%M:%S'),
         }
-        
-        # Prepare context
-        context = {
-            'completed_sale': completed_sale,
-        }
-        
-        return render(request, 'pharmacy/invoice_print.html', context)
-        
+
+        print_invoice_thermal(sale, completed_sale['items'], completed_sale)
+        messages.success(request, f'تمت إعادة طباعة الفاتورة رقم {sale.id}')
     except Exception as e:
-        logger.error(f"Error in invoice_print_old view: {str(e)}", exc_info=True)
-        messages.error(request, f'Error preparing invoice: {str(e)}')
-        return redirect('pharmacy:sales_history')
+        logger.error(f"Error reprinting invoice for sale {sale_id}: {str(e)}", exc_info=True)
+        messages.error(request, f'حدث خطأ أثناء طباعة الفاتورة: {str(e)}')
+
+    return fallback_redirect
 
 @login_required
 def edit_stock_entry(request, entry_id):
