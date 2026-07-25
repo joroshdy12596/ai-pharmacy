@@ -145,6 +145,10 @@ PRINTER_SETTINGS = {
     'PRINTER_DPI': int(os.getenv('PRINTER_DPI', '203')),
     'LABEL_WIDTH': int(os.getenv('LABEL_WIDTH', '40')),
     'LABEL_HEIGHT': int(os.getenv('LABEL_HEIGHT', '25')),
+    # Width of the continuous (gap-less) invoice/receipt roll loaded in the same
+    # printer, in mm. Adjust to match the roll you actually load — measure the
+    # paper width if invoices print cut off or with a big blank margin.
+    'INVOICE_PAPER_WIDTH': int(os.getenv('INVOICE_PAPER_WIDTH', '48')),
 }
 
 # Static files settings

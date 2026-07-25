@@ -736,7 +736,17 @@ def pos_complete_sale(request):
         }
         
         messages.success(request, f'Sale completed successfully. Sale ID: {sale.id}')
-        
+
+        # Print the invoice straight to the thermal printer (same device as the
+        # barcode labels, loaded with the continuous receipt roll instead of the
+        # die-cut label roll). A printer failure must not undo the sale, which is
+        # already committed to the database at this point.
+        try:
+            print_invoice_thermal(sale, request.session['completed_sale']['items'], request.session['completed_sale'])
+        except Exception as e:
+            logger.error(f"Failed to print invoice for sale {sale.id}: {e}", exc_info=True)
+            messages.warning(request, 'تم حفظ البيع لكن حدث خطأ أثناء طباعة الفاتورة تلقائياً')
+
     except ValidationError as e:
         messages.error(request, str(e))
         return redirect('pharmacy:pos')
@@ -1931,6 +1941,220 @@ try:
 except ImportError:
     def shape_arabic(text):
         return text
+
+
+def print_invoice_thermal(sale, completed_items, extra, printer_name=None):
+    """Print a sale invoice/receipt directly to the same thermal printer used for
+    barcode labels, using the continuous (gap-less) roll instead of the die-cut
+    label roll. Mirrors the GDI drawing approach used by barcode_print() so both
+    features go through the same printer without needing a browser print dialog.
+
+    Returns True on success, raises on failure (caller decides how to report it).
+    """
+    import win32print
+    import win32ui
+    import win32gui
+    import win32con
+    from PIL import ImageWin
+
+    printer_name = printer_name or settings.PRINTER_SETTINGS['PRINTER_PATH']
+    DPI = settings.PRINTER_SETTINGS['PRINTER_DPI']
+    MM_TO_INCH = 25.4
+    PAPER_WIDTH_MM = settings.PRINTER_SETTINGS.get('INVOICE_PAPER_WIDTH', 48)
+    WIDTH_PX = int(PAPER_WIDTH_MM / MM_TO_INCH * DPI)
+
+    REGULAR_PATHS = [
+        "C:\\Windows\\Fonts\\arial.ttf",
+        "C:\\Windows\\Fonts\\Tahoma.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ]
+    BOLD_PATHS = [
+        "C:\\Windows\\Fonts\\arialbd.ttf",
+        "C:\\Windows\\Fonts\\tahomabd.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    ]
+    TITLE_SIZE = 26
+    HEADING_SIZE = 20
+    BODY_SIZE = 19
+
+    def _load_font(paths, size):
+        for path in paths:
+            try:
+                return ImageFont.truetype(path, size)
+            except OSError:
+                continue
+        return ImageFont.load_default()
+
+    title_font = _load_font(BOLD_PATHS, TITLE_SIZE)
+    heading_font = _load_font(BOLD_PATHS, HEADING_SIZE)
+    body_font = _load_font(REGULAR_PATHS, BODY_SIZE)
+    body_bold_font = _load_font(BOLD_PATHS, BODY_SIZE)
+
+    LINE_GAP = 8
+    FONT_HEIGHTS = {}
+
+    def txt(text):
+        """Shape+reorder Arabic text for correct display; safe no-op on plain numbers/ASCII."""
+        return shape_arabic(str(text))
+
+    # Each entry: (text, font, align, kind) kind in {"text", "hr", "space"}
+    lines = []
+
+    def add(text, font, align="right"):
+        lines.append(("text", txt(text), font, align))
+
+    def add_rule(thick=False):
+        lines.append(("hr", None, None, thick))
+
+    def add_space(px=6):
+        lines.append(("space", px, None, None))
+
+    def add_cols(right_text, mid_text, left_text, font):
+        lines.append(("cols", (txt(right_text), txt(mid_text), txt(left_text)), font, None))
+
+    add_space(16)
+    add("صيدلية الإسراء", title_font, "center")
+    add("فاتورة مبيعات", heading_font, "center")
+    add_space(12)
+    add_rule()
+    add_space(14)
+
+    add(f"رقم الفاتورة: {sale.id}", body_font, "right")
+    add_space(4)
+    add(f"التاريخ: {extra['created_at']}", body_font, "right")
+    if extra.get('customer'):
+        add_space(4)
+        add(f"العميل: {extra['customer']}", body_font, "right")
+    add_space(12)
+    add_rule()
+    add_space(14)
+
+    add_cols("الكمية", "السعر", "الإجمالي", body_bold_font)
+    add_rule()
+    add_space(10)
+
+    for item in completed_items:
+        add(item['name'][:28], body_bold_font, "right")
+        add_space(4)
+        add_cols(
+            f"{item['quantity']} {item['unit_type']}",
+            f"{item['price']:.2f}",
+            f"{item['total']:.2f}",
+            body_font,
+        )
+        add_space(14)
+
+    add_rule()
+    add_space(14)
+
+    add(f"الإجمالي: {extra['original_total']:.2f} ج.م", body_font, "right")
+    if extra.get('discount_amount'):
+        add_space(6)
+        add(f"الخصم: {extra['discount_amount']:.2f} ج.م", body_font, "right")
+    add_space(8)
+    add(f"الصافي المطلوب: {extra['total']:.2f} ج.م", heading_font, "right")
+    add_space(10)
+    add(f"المبلغ المدفوع: {extra['cash_given']:.2f} ج.م", body_font, "right")
+    add_space(4)
+    add(f"الباقي: {extra['change_return']:.2f} ج.م", body_font, "right")
+    add_space(14)
+    add_rule(thick=True)
+    add_space(20)
+    add("شكراً لزيارتكم", heading_font, "center")
+    add_space(4)
+    add("نتمنى لكم دوام الصحة والعافية", body_font, "center")
+    add_space(50)
+
+    TOP_MARGIN = 20
+    BOTTOM_MARGIN = 10
+    SIDE_MARGIN = 12
+
+    def line_height_of(f):
+        if f not in FONT_HEIGHTS:
+            bbox = f.getbbox("Aأيگ0")
+            FONT_HEIGHTS[f] = (bbox[3] - bbox[1]) + LINE_GAP
+        return FONT_HEIGHTS[f]
+
+    height_px = TOP_MARGIN + BOTTOM_MARGIN
+    for kind, text, font, align in lines:
+        if kind == "text" or kind == "cols":
+            height_px += line_height_of(font)
+        elif kind == "hr":
+            height_px += 10 if align else 6  # `align` slot doubles as `thick` for hr rows
+        elif kind == "space":
+            height_px += text
+
+    image = Image.new("L", (WIDTH_PX, height_px), 255)
+    draw = ImageDraw.Draw(image)
+
+    y = TOP_MARGIN
+    for kind, text, font, align in lines:
+        if kind == "text":
+            h = line_height_of(font)
+            if align == "center":
+                draw.text((WIDTH_PX // 2, y), text, font=font, fill=0, anchor="ma")
+            elif align == "right":
+                draw.text((WIDTH_PX - SIDE_MARGIN, y), text, font=font, fill=0, anchor="ra")
+            else:
+                draw.text((SIDE_MARGIN, y), text, font=font, fill=0)
+            y += h
+        elif kind == "cols":
+            h = line_height_of(font)
+            right_text, mid_text, left_text = text
+            draw.text((WIDTH_PX - SIDE_MARGIN, y), right_text, font=font, fill=0, anchor="ra")
+            draw.text((WIDTH_PX // 2, y), mid_text, font=font, fill=0, anchor="ma")
+            draw.text((SIDE_MARGIN, y), left_text, font=font, fill=0, anchor="la")
+            y += h
+        elif kind == "hr":
+            thick = align
+            if thick:
+                draw.line([(SIDE_MARGIN, y + 2), (WIDTH_PX - SIDE_MARGIN, y + 2)], fill=0, width=2)
+                draw.line([(SIDE_MARGIN, y + 6), (WIDTH_PX - SIDE_MARGIN, y + 6)], fill=0, width=1)
+                y += 10
+            else:
+                draw.line([(SIDE_MARGIN, y + 3), (WIDTH_PX - SIDE_MARGIN, y + 3)], fill=0, width=1)
+                y += 6
+        elif kind == "space":
+            y += text
+
+    # Try to print on a custom continuous paper size matching the roll width and
+    # the exact receipt length, so the printer's own gap sensor (tuned for the
+    # die-cut label roll) isn't fighting a page size meant for labels. Falls back
+    # to the printer's current default paper/page settings if the driver rejects
+    # a custom size (as barcode_print() has always done).
+    height_mm = (height_px / DPI) * MM_TO_INCH
+    hDC = None
+    try:
+        hprinter = win32print.OpenPrinter(printer_name)
+        try:
+            printer_info = win32print.GetPrinter(hprinter, 2)
+            devmode = printer_info['pDevMode']
+            devmode.PaperSize = 256  # DMPAPER_USER
+            devmode.PaperWidth = int(PAPER_WIDTH_MM * 10)   # tenths of a millimeter
+            devmode.PaperLength = int(height_mm * 10)
+            devmode.Fields |= win32con.DM_PAPERSIZE | win32con.DM_PAPERWIDTH | win32con.DM_PAPERLENGTH
+        finally:
+            win32print.ClosePrinter(hprinter)
+        hdc_handle = win32gui.CreateDC("WINSPOOL", printer_name, devmode)
+        hDC = win32ui.CreateDCFromHandle(hdc_handle)
+        printer_size = (image.size[0], image.size[1])
+    except Exception:
+        logger.warning("Custom invoice paper size not accepted by printer driver, falling back to default page size", exc_info=True)
+        hDC = win32ui.CreateDC()
+        hDC.CreatePrinterDC(printer_name)
+        printer_size = hDC.GetDeviceCaps(110), hDC.GetDeviceCaps(111)
+
+    x = max(0, int((printer_size[0] - image.size[0]) / 2))
+    y = 0
+    hDC.StartDoc(f"Invoice {sale.id}")
+    hDC.StartPage()
+    dib = ImageWin.Dib(image)
+    dib.draw(hDC.GetHandleOutput(), (x, y, x + image.size[0], y + image.size[1]))
+    hDC.EndPage()
+    hDC.EndDoc()
+    hDC.DeleteDC()
+    return True
+
 
 @login_required
 def barcode_print(request):
