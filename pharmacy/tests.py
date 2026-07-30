@@ -4,9 +4,45 @@ from django.utils import timezone
 from django.contrib.auth import get_user_model
 from datetime import timedelta
 
-from .models import Medicine, StockEntry
+from .models import Medicine, StockEntry, Sale, SaleItem
 
 User = get_user_model()
+
+class PosCompletionTransactionTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user('cashier', 'cashier@example.com', 'pass')
+        self.user.is_staff = True
+        self.user.save()
+        self.client.force_login(self.user)
+
+    def test_sale_is_not_saved_if_item_creation_fails(self):
+        medicine = Medicine.objects.create(
+            name='Test Medicine',
+            description='desc',
+            price=10.0,
+            purchase_price=5.0,
+            stock=10,
+            category='OTC',
+            barcode_number='1111111111111'
+        )
+
+        self.client.session['cart'] = [{
+            'medicine_id': medicine.id,
+            'quantity': 1,
+            'unit_type': 'BOX',
+            'total': 10.0,
+            'discounted_price': 10.0,
+        }]
+        self.client.session.save()
+
+        response = self.client.post(reverse('pharmacy:pos_complete_sale'), {
+            'payment_method': 'CASH',
+            'action': 'complete',
+        }, follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Sale.objects.count(), 0)
+        self.assertEqual(SaleItem.objects.count(), 0)
 
 class PosExpiryAlertTests(TestCase):
     def create_medicine(self, name, barcode='0000000000000'):

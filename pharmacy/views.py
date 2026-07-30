@@ -622,39 +622,38 @@ def pos_complete_sale(request):
         if change_return < 0:
             change_return = 0.0
 
-        # Create sale record
-        sale = Sale.objects.create(
-            customer=customer,
-            payment_method=payment_method,
-            total_amount=total_amount,
-            cash_given=round(cash_given, 2),
-            change_return=round(change_return, 2),
-            user=request.user,
-            is_completed=True
-        )
+        from .models import StockEntry as _StockEntry
 
-        # Create sale items and update stock
-        completed_items = []
-        for item in cart:
-            medicine = Medicine.objects.get(id=item['medicine_id'])
-            exp_date = item.get('expiration_date')
-            if not exp_date:
-                raise ValidationError(f'Expiration date missing for {medicine.name} in cart.')
-            # Parse date string if needed
-            if isinstance(exp_date, str):
-                try:
-                    exp_date_obj = timezone.datetime.strptime(exp_date, '%Y-%m-%d').date()
-                except Exception:
-                    exp_date_obj = timezone.datetime.strptime(exp_date, '%d/%m/%Y').date()
-            else:
-                exp_date_obj = exp_date
+        with transaction.atomic():
+            # Create sale record
+            sale = Sale.objects.create(
+                customer=customer,
+                payment_method=payment_method,
+                total_amount=total_amount,
+                cash_given=round(cash_given, 2),
+                change_return=round(change_return, 2),
+                user=request.user,
+                is_completed=True
+            )
 
-            # Use a DB transaction and row-level lock to avoid race conditions when decrementing stock
-            from django.db import transaction
-            from .models import StockEntry as _StockEntry
+            # Create sale items and update stock
+            completed_items = []
+            for item in cart:
+                medicine = Medicine.objects.get(id=item['medicine_id'])
+                exp_date = item.get('expiration_date')
+                if not exp_date:
+                    raise ValidationError(f'Expiration date missing for {medicine.name} in cart.')
+                # Parse date string if needed
+                if isinstance(exp_date, str):
+                    try:
+                        exp_date_obj = timezone.datetime.strptime(exp_date, '%Y-%m-%d').date()
+                    except Exception:
+                        exp_date_obj = timezone.datetime.strptime(exp_date, '%d/%m/%Y').date()
+                else:
+                    exp_date_obj = exp_date
 
-            with transaction.atomic():
-                # Pick a candidate stock entry (prefers one with stock), then lock it for update
+                # Use row-level lock to avoid race conditions when decrementing stock
+                # and keep the whole sale creation process atomic.
                 candidate = select_stock_entry_for_expiration(medicine, exp_date_obj, item['unit_type'], item['quantity'])
                 if not candidate:
                     raise ValidationError(f'No stock entry with available quantity found for {medicine.name} with expiration {exp_date}')
@@ -683,15 +682,15 @@ def pos_complete_sale(request):
                 # Recalculate medicine stock within the same transaction to keep consistency
                 medicine.update_stock()
 
-            sale_item = SaleItem.objects.create(
-                sale=sale,
-                medicine=medicine,
-                quantity=item['quantity'],
-                unit_type=item['unit_type'],
-                price=item['discounted_price'],
-                expiry_date=stock_entry.expiration_date
-            )
-            completed_items.append(sale_item)
+                sale_item = SaleItem.objects.create(
+                    sale=sale,
+                    medicine=medicine,
+                    quantity=item['quantity'],
+                    unit_type=item['unit_type'],
+                    price=item['discounted_price'],
+                    expiry_date=stock_entry.expiration_date
+                )
+                completed_items.append(sale_item)
 
         # Add loyalty points if customer exists
         points_added = 0
