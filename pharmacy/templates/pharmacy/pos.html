@@ -285,11 +285,23 @@
                                     <td>{{ item.quantity }}</td>
                                     <td>${{ item.total|floatformat:2 }}</td>
                                     <td>
-                                        <form method="post" action="{% url 'pharmacy:pos_remove_item' forloop.counter0 %}" style="display: inline;">
+                                        <form method="post" action="{% url 'pharmacy:pos_update_item' forloop.counter0 %}" class="cart-edit-form d-flex gap-1 align-items-center mb-1" data-item-index="{{ forloop.counter0 }}">
                                             {% csrf_token %}
-                                            <button type="submit" class="btn btn-sm btn-danger">
+                                            <input type="number" name="quantity" value="{{ item.quantity }}" min="1" class="form-control form-control-sm" style="width: 70px;" aria-label="Quantity" required>
+                                            <select name="unit_type" class="form-select form-select-sm" style="width: 85px;" aria-label="Unit type">
+                                                <option value="BOX" {% if item.unit_type == 'BOX' %}selected{% endif %}>Box</option>
+                                                <option value="STRIP" {% if item.unit_type == 'STRIP' %}selected{% endif %}>Strip</option>
+                                            </select>
+                                            <button type="submit" class="btn btn-sm btn-primary" title="Update item">
+                                                <i class="fas fa-save"></i>
+                                            </button>
+                                        </form>
+                                        <form method="post" action="{% url 'pharmacy:pos_remove_item' forloop.counter0 %}" class="d-inline">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-danger" title="Remove item">
                                                 <i class="fas fa-trash"></i>
-                                            </form>
+                                            </button>
+                                        </form>
                                     </td>
                                 </tr>
                                 {% endfor %}
@@ -348,6 +360,7 @@
                         <input type="hidden" name="customer_id" id="selected-customer-id" value="{{ selected_customer.id|default:'' }}">
                         <input type="hidden" name="cash_given" id="cashGivenHidden" value="">
                         <input type="hidden" name="change_return" id="changeReturnHidden" value="">
+                        <input type="hidden" name="cart_updates" id="cartUpdatesHidden" value="[]">
 
             <div class="form-group mb-3">
                 <label for="discount_percentage">Discount Percentage</label>
@@ -587,6 +600,19 @@ document.addEventListener('DOMContentLoaded', function() {
     var changeReturnHidden = document.getElementById('changeReturnHidden');
     if (posCompleteSaleForm) {
         posCompleteSaleForm.addEventListener('submit', function() {
+            var cartUpdatesHidden = document.getElementById('cartUpdatesHidden');
+            var cartUpdates = [];
+            document.querySelectorAll('.cart-edit-form').forEach(function(editForm) {
+                cartUpdates.push({
+                    item_id: parseInt(editForm.dataset.itemIndex, 10),
+                    quantity: parseInt(editForm.querySelector('[name="quantity"]').value, 10),
+                    unit_type: editForm.querySelector('[name="unit_type"]').value
+                });
+            });
+            if (cartUpdatesHidden) {
+                cartUpdatesHidden.value = JSON.stringify(cartUpdates);
+            }
+
             var given = parseFloat(cashGivenInput.value);
             var totalText = totalAmountElem ? totalAmountElem.textContent.replace(/[$\s]/g, '') : '0';
             var total = parseFloat(totalText) || 0;

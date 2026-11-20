@@ -95,6 +95,7 @@ from datetime import datetime, timedelta
 from django.core.exceptions import ValidationError
 from decimal import Decimal
 import statistics
+import json
 
 
 def select_stock_entry_for_expiration(medicine, exp_date, unit_type='BOX', needed_qty=1):
@@ -589,6 +590,114 @@ def pos_remove_item(request, item_id):
 
 @login_required
 @require_POST
+def pos_update_item(request, item_id):
+    """Update quantity and unit type for an existing cart item."""
+    cart = request.session.get('cart', [])
+
+    if not 0 <= item_id < len(cart):
+        messages.error(request, 'Invalid cart item')
+        return redirect('pharmacy:pos')
+
+    try:
+        quantity = int(request.POST.get('quantity', 1))
+        unit_type = request.POST.get('unit_type', 'BOX').upper()
+        if quantity < 1:
+            messages.error(request, 'Quantity must be at least 1')
+            return redirect('pharmacy:pos')
+        if unit_type not in ('BOX', 'STRIP'):
+            messages.error(request, 'Invalid unit type')
+            return redirect('pharmacy:pos')
+
+        item = cart[item_id]
+        medicine = Medicine.objects.get(id=item['medicine_id'])
+
+        if unit_type == 'STRIP' and not medicine.can_sell_strips:
+            messages.error(request, f'Cannot sell {medicine.name} by strip')
+            return redirect('pharmacy:pos')
+
+        expiration_date = item.get('expiration_date')
+        if not expiration_date:
+            messages.error(request, 'Expiration date missing for this cart item')
+            return redirect('pharmacy:pos')
+
+        if isinstance(expiration_date, str):
+            try:
+                exp_date_obj = timezone.datetime.strptime(expiration_date, '%Y-%m-%d').date()
+            except Exception:
+                exp_date_obj = timezone.datetime.strptime(expiration_date, '%d/%m/%Y').date()
+        else:
+            exp_date_obj = expiration_date
+
+        stock_entry = select_stock_entry_for_expiration(medicine, exp_date_obj, unit_type, quantity)
+        if not stock_entry:
+            messages.error(request, f'Not enough stock for {medicine.name} in the selected unit')
+            return redirect('pharmacy:pos')
+
+        reserved_quantity = 0
+        for other_index, other_item in enumerate(cart):
+            if other_index == item_id:
+                continue
+            if other_item.get('medicine_id') != medicine.id:
+                continue
+            if str(other_item.get('expiration_date')) != str(expiration_date):
+                continue
+            if other_item.get('unit_type') == unit_type:
+                reserved_quantity += int(other_item.get('quantity', 0))
+
+        if unit_type == 'STRIP':
+            available_quantity = stock_entry.strips_remaining
+            if available_quantity is None:
+                available_quantity = stock_entry.quantity * medicine.strips_per_box
+        else:
+            available_quantity = stock_entry.quantity
+
+        if quantity + reserved_quantity > available_quantity:
+            messages.error(request, f'Not enough stock for {medicine.name}; another cart item already reserves some of it')
+            return redirect('pharmacy:pos')
+
+        original_price = medicine.get_strip_price() if unit_type == 'STRIP' else medicine.price
+
+        customer = None
+        customer_id = request.session.get('selected_customer_id')
+        if customer_id:
+            try:
+                customer = Customer.objects.get(id=customer_id)
+            except Customer.DoesNotExist:
+                customer = None
+
+        min_profitable_price = medicine.purchase_price * Decimal('1.10')
+        if unit_type == 'STRIP':
+            min_profitable_price = min_profitable_price / medicine.strips_per_box
+
+        if customer:
+            if customer.customer_type == 'FAMILY':
+                discounted_price = min_profitable_price
+            else:
+                discount = customer.discount_percentage / 100
+                discounted_price = original_price * (1 - discount)
+                if discounted_price < min_profitable_price:
+                    discounted_price = min_profitable_price
+        else:
+            discounted_price = original_price
+
+        item['quantity'] = quantity
+        item['unit_type'] = unit_type
+        item['original_price'] = float(original_price)
+        item['discounted_price'] = float(discounted_price)
+        item['total'] = float(discounted_price * quantity)
+
+        cart[item_id] = item
+        request.session['cart'] = cart
+        request.session.modified = True
+        messages.success(request, f'Updated {medicine.name} in cart')
+    except (Medicine.DoesNotExist, ValueError, ValidationError):
+        messages.error(request, 'Could not update cart item')
+
+    return redirect('pharmacy:pos')
+
+
+@login_required
+@require_POST
 def pos_complete_sale(request):
     """Complete the sale and clear the cart"""
     try:
@@ -596,6 +705,99 @@ def pos_complete_sale(request):
         if not cart:
             messages.error(request, 'Cart is empty')
             return redirect('pharmacy:pos')
+
+        cart_updates_json = request.POST.get('cart_updates', '[]')
+        try:
+            cart_updates = json.loads(cart_updates_json)
+        except Exception:
+            cart_updates = []
+
+        if cart_updates:
+            customer_id = request.session.get('selected_customer_id')
+            customer_for_prices = Customer.objects.filter(id=customer_id).first() if customer_id else None
+
+            for update in cart_updates:
+                try:
+                    item_id = int(update['item_id'])
+                    quantity = int(update['quantity'])
+                    unit_type = str(update['unit_type']).upper()
+                except Exception:
+                    raise ValidationError('Invalid cart edit')
+
+                if not 0 <= item_id < len(cart):
+                    raise ValidationError('Invalid cart item')
+                if quantity < 1:
+                    raise ValidationError('Quantity must be at least 1')
+                if unit_type not in ('BOX', 'STRIP'):
+                    raise ValidationError('Invalid unit type')
+
+                item = cart[item_id]
+                medicine = Medicine.objects.get(id=item['medicine_id'])
+                if unit_type == 'STRIP' and not medicine.can_sell_strips:
+                    raise ValidationError(f'Cannot sell {medicine.name} by strip')
+
+                expiration_date = item.get('expiration_date')
+                if not expiration_date:
+                    raise ValidationError(f'Expiration date missing for {medicine.name}')
+
+                if isinstance(expiration_date, str):
+                    try:
+                        exp_date_obj = timezone.datetime.strptime(expiration_date, '%Y-%m-%d').date()
+                    except Exception:
+                        exp_date_obj = timezone.datetime.strptime(expiration_date, '%d/%m/%Y').date()
+                else:
+                    exp_date_obj = expiration_date
+
+                stock_entry = select_stock_entry_for_expiration(medicine, exp_date_obj, unit_type, quantity)
+                if not stock_entry:
+                    raise ValidationError(f'Not enough stock for {medicine.name}')
+
+                reserved_quantity = 0
+                for other_index, other_item in enumerate(cart):
+                    if other_index == item_id:
+                        continue
+                    if other_item.get('medicine_id') != medicine.id:
+                        continue
+                    if str(other_item.get('expiration_date')) != str(expiration_date):
+                        continue
+                    if other_item.get('unit_type') == unit_type:
+                        reserved_quantity += int(other_item.get('quantity', 0))
+
+                if unit_type == 'STRIP':
+                    available_quantity = stock_entry.strips_remaining
+                    if available_quantity is None:
+                        available_quantity = stock_entry.quantity * medicine.strips_per_box
+                else:
+                    available_quantity = stock_entry.quantity
+
+                if quantity + reserved_quantity > available_quantity:
+                    raise ValidationError(f'Not enough stock for {medicine.name}; another cart item reserves some of it')
+
+                original_price = medicine.get_strip_price() if unit_type == 'STRIP' else medicine.price
+                min_profitable_price = medicine.purchase_price * Decimal('1.10')
+                if unit_type == 'STRIP':
+                    min_profitable_price = min_profitable_price / medicine.strips_per_box
+
+                if customer_for_prices:
+                    if customer_for_prices.customer_type == 'FAMILY':
+                        discounted_price = min_profitable_price
+                    else:
+                        discount = customer_for_prices.discount_percentage / 100
+                        discounted_price = original_price * (1 - discount)
+                        if discounted_price < min_profitable_price:
+                            discounted_price = min_profitable_price
+                else:
+                    discounted_price = original_price
+
+                item['quantity'] = quantity
+                item['unit_type'] = unit_type
+                item['original_price'] = float(original_price)
+                item['discounted_price'] = float(discounted_price)
+                item['total'] = float(discounted_price * quantity)
+                cart[item_id] = item
+
+            request.session['cart'] = cart
+            request.session.modified = True
 
         payment_method = request.POST.get('payment_method', 'CASH')
         customer_id = request.POST.get('customer_id')

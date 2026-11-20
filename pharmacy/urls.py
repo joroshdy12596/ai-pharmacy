@@ -31,6 +31,7 @@ urlpatterns = [
     path('pos/', views.pos_view, name='pos'),
     path('pos/add/', views.pos_add_to_cart, name='pos_add_to_cart'),
     path('pos/remove/<int:item_id>/', views.pos_remove_item, name='pos_remove_item'),
+    path('pos/update/<int:item_id>/', views.pos_update_item, name='pos_update_item'),
     path('pos/complete/', views.pos_complete_sale, name='pos_complete_sale'),
     path('pos/get_expiration_dates/', views.get_expiration_dates, name='get_expiration_dates'),
     path('sales/', views.sales_history, name='sales_history'),
